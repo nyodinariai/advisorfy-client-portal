@@ -14,6 +14,7 @@ export type FormularioStatus =
   | 'SUBMETIDO'
   | 'EM_CORRECAO'
   | 'CORRIGIDO'
+  | 'AGUARDANDO_VALIDACAO'
   | 'APROVADO';
 
 export type TransferenciaStatus =
@@ -36,6 +37,8 @@ export interface EtapaResponse {
   instrucoesFallback: string | null;
   observacao: string | null;
   concluidaEm: string | null;
+  eventos: EventoEtapaResponse[];
+  viabilidadeStatus: ViabilidadeStatus | null;
 }
 
 export interface ComentarioResponse {
@@ -105,6 +108,10 @@ export interface AberturaResponse {
   atividadesSecundarias?: string[];
   razoesSociaisAlternativas?: RazaoSocialSugestao[];
   propostaRegime?: PropostaRegimeTributario;
+  capitalSocial?: number | null;
+  linkAssinaturaDigital?: string | null;
+  numeroProtocoloJucepar?: string | null;
+  outrasPreferenciasRazaoSocial?: string[] | null;
 }
 
 export interface TransferenciaResponse {
@@ -133,6 +140,7 @@ export const FORMULARIO_STATUS_CLIENTE: Record<FormularioStatus, string> = {
   SUBMETIDO: 'Em analise pelo nosso time',
   EM_CORRECAO: 'Correcoes solicitadas',
   CORRIGIDO: 'Correcoes enviadas',
+  AGUARDANDO_VALIDACAO: 'Confirme seus dados',
   APROVADO: 'Formulario aprovado',
 };
 
@@ -200,7 +208,9 @@ export const TIPO_SOCIETARIO_OPCOES: TipoSocietarioOpcao[] = [
 export interface AberturaInput {
   tipoSocietario: TipoSocietario;
   razaoSocial: string;
+  razoesSociaisAdicionais?: string[];
   nomeFantasia?: string;
+  capitalSocial?: number;
   socios: {
     nome: string;
     cpf: string;
@@ -257,6 +267,8 @@ export interface CorrecaoAbertura {
   opcoes?: string[];
   status: CorrecaoStatus;
   criadoEm: string;
+  origem?: 'ADMIN' | 'RECUSA_ETAPA';
+  etapaId?: string | null;
 }
 
 export interface AtividadeSolicitada {
@@ -295,10 +307,22 @@ export interface PropostaRegimeTributario {
   criadoEm?: string;
 }
 
+export interface SocioResumo {
+  id: string;
+  pessoaId: string;
+  nome: string;
+  cpf: string;
+  email: string;
+  telefone?: string | null;
+  participacao: number;
+  administrador: boolean;
+  enderecoResidencial?: EnderecoCompleto | null;
+}
+
 export interface AberturaEstruturaResponse {
   aberturaId: string;
   enderecoSede?: EnderecoCompleto | null;
-  socios: SocioInput[];
+  participacoes: SocioResumo[];
   atividadesSolicitadas: AtividadeSolicitada[];
   correcoes: CorrecaoAbertura[];
   propostas: PropostaRegimeTributario[];
@@ -307,6 +331,24 @@ export interface AberturaEstruturaResponse {
 export interface ResponderCorrecaoInput {
   novoValor?: string;
   endereco?: EnderecoCompleto;
+}
+
+export type MinutaStatus =
+  | 'AGUARDANDO_APROVACAO'
+  | 'APROVADA'
+  | 'ALTERACAO_SOLICITADA'
+  | 'SUBSTITUIDA';
+
+export interface MinutaContratoSocial {
+  id: string;
+  aberturaId: string;
+  versao: number;
+  urlDocumento: string;
+  status: MinutaStatus;
+  observacoesCliente: string | null;
+  criadoPor: string | null;
+  aprovadaEm: string | null;
+  criadoEm: string;
 }
 
 export const REGIME_LABELS: Record<RegimeTributario, string> = {
@@ -351,4 +393,54 @@ export const BLOCO_LABEL_CLIENTE: Record<string, string> = {
   PROFISSIONAL: 'Dados profissionais',
   FISCAL: 'Dados fiscais',
   LICENCIAMENTO: 'Licenciamento',
+};
+
+// ── Eventos de etapa ──────────────────────────────────────────────────────────
+
+export type TipoEventoEtapa = 'RECUSA' | 'NOVA_TENTATIVA' | 'CONCLUSAO' | 'OBSERVACAO_ADMIN';
+export type ViabilidadeStatus = 'EM_ANDAMENTO' | 'AGUARDANDO_CLIENTE' | 'CONCLUIDA';
+
+export interface EventoEtapaResponse {
+  id: string;
+  etapa: string;
+  etapaLabel: string;
+  tipo: TipoEventoEtapa;
+  tipoLabel: string;
+  dados: string | null;
+  mensagemCliente: string | null;
+  criadoPor: string | null;
+  criadoEm: string;
+}
+
+export interface RecusaDados {
+  motivos: MotivoRecusaViabilidade[];
+  detalhes: Partial<Record<MotivoRecusaViabilidade, string>>;
+}
+
+export interface ConclusaoDados {
+  numeroProtocolo: string | null;
+  observacao: string | null;
+}
+
+export type MotivoRecusaViabilidade =
+  | 'RAZAO_SOCIAL_SIMILAR'
+  | 'RAZAO_SOCIAL_PALAVRA_RESTRITA'
+  | 'RAZAO_SOCIAL_INADEQUADA'
+  | 'ENDERECO_ZONEAMENTO_INCOMPATIVEL'
+  | 'ENDERECO_NAO_LOCALIZADO'
+  | 'ENDERECO_RESTRICAO_IMOVEL'
+  | 'ATIVIDADE_VEDADA'
+  | 'ATIVIDADE_LICENCA_PREVIA'
+  | 'ATIVIDADE_INCOMPATIBILIDADE_CNAES';
+
+export const MOTIVO_RECUSA_LABELS: Record<MotivoRecusaViabilidade, string> = {
+  RAZAO_SOCIAL_SIMILAR: 'Razão social similar já registrada',
+  RAZAO_SOCIAL_PALAVRA_RESTRITA: 'Razão social contém palavra restrita',
+  RAZAO_SOCIAL_INADEQUADA: 'Razão social inadequada',
+  ENDERECO_ZONEAMENTO_INCOMPATIVEL: 'Endereço com zoneamento incompatível para a atividade',
+  ENDERECO_NAO_LOCALIZADO: 'Endereço não localizado',
+  ENDERECO_RESTRICAO_IMOVEL: 'Imóvel com restrição cadastral',
+  ATIVIDADE_VEDADA: 'Atividade vedada neste local',
+  ATIVIDADE_LICENCA_PREVIA: 'Atividade requer licença prévia',
+  ATIVIDADE_INCOMPATIBILIDADE_CNAES: 'Incompatibilidade entre os CNAEs informados',
 };

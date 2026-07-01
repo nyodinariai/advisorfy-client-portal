@@ -11,6 +11,11 @@ import {
   aprovarRazaoSocial,
   responderCorrecaoAbertura,
   responderPropostaRegime,
+  adicionarComentarioAbertura,
+  validarDossie,
+  fetchMinutas,
+  aprovarMinuta,
+  solicitarAlteracaoMinuta,
 } from './api';
 import type { AberturaInput, ResponderCorrecaoInput } from './types';
 
@@ -105,6 +110,61 @@ export function useResponderPropostaRegime() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
       qc.invalidateQueries({ queryKey: queryKeys.aberturaEstrutura(vars.aberturaId) });
+    },
+  });
+}
+
+export function useAdicionarComentarioAbertura() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, texto }: { aberturaId: string; texto: string }) =>
+      adicionarComentarioAbertura(aberturaId, texto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useValidarDossie() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      aberturaId,
+      aprovado,
+      motivoRejeicao,
+    }: {
+      aberturaId: string;
+      aprovado: boolean;
+      motivoRejeicao?: string;
+    }) => validarDossie(aberturaId, aprovado, motivoRejeicao),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useMinutas(aberturaId?: string) {
+  return useQuery({
+    queryKey: ['abertura-minutas', aberturaId ?? ''],
+    queryFn: () => fetchMinutas(aberturaId!),
+    enabled: Boolean(aberturaId),
+  });
+}
+
+export function useAprovarMinuta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => aprovarMinuta(aberturaId),
+    onSuccess: (_data, aberturaId) => {
+      qc.invalidateQueries({ queryKey: ['abertura-minutas', aberturaId] });
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
+    },
+  });
+}
+
+export function useSolicitarAlteracaoMinuta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, observacoes }: { aberturaId: string; observacoes: string }) =>
+      solicitarAlteracaoMinuta(aberturaId, observacoes),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['abertura-minutas', vars.aberturaId] });
     },
   });
 }

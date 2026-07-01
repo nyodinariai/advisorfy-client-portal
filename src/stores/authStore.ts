@@ -2,10 +2,10 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { decodeJwt } from '@/lib/jwt';
 import type { AuthUser } from '@/types/auth';
 
 const COOKIE_NAME = 'access_token';
-const COOKIE_MAX_AGE = 60 * 60 * 24; // 24 h
 
 interface AuthState {
   user: AuthUser | null;
@@ -21,7 +21,11 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       setSession: (user, token) => {
         set({ user, token });
-        document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
+        const exp = decodeJwt(token)?.exp;
+        const maxAge = typeof exp === 'number'
+          ? Math.max(0, exp - Math.floor(Date.now() / 1000))
+          : 60 * 60 * 24;
+        document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${maxAge}; samesite=lax`;
       },
       clearSession: () => {
         set({ user: null, token: null });

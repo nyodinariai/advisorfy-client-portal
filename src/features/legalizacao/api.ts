@@ -6,6 +6,7 @@ import type {
   DocumentoResumo,
   AberturaInput,
   ResponderCorrecaoInput,
+  MinutaContratoSocial,
 } from './types';
 
 export async function fetchMinhaAbertura(): Promise<AberturaResponse | null> {
@@ -107,4 +108,47 @@ export async function marcarComentariosLidos(
   processoId: string
 ): Promise<void> {
   await api.post(`/api/client/legalizacao/${processoTipo}/${processoId}/comentarios/lidos`);
+}
+
+export async function adicionarComentarioAbertura(
+  aberturaId: string,
+  texto: string
+): Promise<void> {
+  await api.post(`/api/client/legalizacao/abertura/${aberturaId}/comentarios`, { texto });
+}
+
+export async function validarDossie(
+  aberturaId: string,
+  aprovado: boolean,
+  motivoRejeicao?: string
+): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/formulario/validar-dossie`,
+    { aprovado, motivoRejeicao }
+  );
+}
+
+export async function fetchMinutas(aberturaId: string): Promise<MinutaContratoSocial[]> {
+  const { data } = await api.get<MinutaContratoSocial[]>(
+    `/api/client/legalizacao/abertura/${aberturaId}/minutas`
+  );
+  return data;
+}
+
+export async function aprovarMinuta(aberturaId: string): Promise<MinutaContratoSocial[]> {
+  const { data } = await api.post<MinutaContratoSocial[]>(
+    `/api/client/legalizacao/abertura/${aberturaId}/minuta/aprovar`
+  );
+  return data;
+}
+
+export async function solicitarAlteracaoMinuta(
+  aberturaId: string,
+  observacoes: string
+): Promise<MinutaContratoSocial[]> {
+  const { data } = await api.post<MinutaContratoSocial[]>(
+    `/api/client/legalizacao/abertura/${aberturaId}/minuta/solicitar-alteracao`,
+    { observacoes }
+  );
+  return data;
 }
