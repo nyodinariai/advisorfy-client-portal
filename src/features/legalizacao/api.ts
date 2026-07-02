@@ -152,3 +152,19 @@ export async function solicitarAlteracaoMinuta(
   );
   return data;
 }
+
+export async function confirmarAssinaturaCliente(aberturaId: string): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/etapas/assinatura-digital/confirmar-cliente`
+  );
+}
+
+export async function confirmarGovbr(
+  aberturaId: string,
+  opcao: 'GOV_BR' | 'E_CPF'
+): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/etapas/verificacao-govbr/confirmar`,
+    { opcao }
+  );
+}

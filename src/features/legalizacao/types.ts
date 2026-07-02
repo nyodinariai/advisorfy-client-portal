@@ -39,6 +39,11 @@ export interface EtapaResponse {
   concluidaEm: string | null;
   eventos: EventoEtapaResponse[];
   viabilidadeStatus: ViabilidadeStatus | null;
+  govbrOpcao: 'GOV_BR' | 'E_CPF' | null;
+  assinaturaProtocolo: string | null;
+  assinaturaClienteAssinou: boolean;
+  assinaturaAdminAssinou: boolean;
+  assinaturaUrlContrato: string | null;
 }
 
 export interface ComentarioResponse {

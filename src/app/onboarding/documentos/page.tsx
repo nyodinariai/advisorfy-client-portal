@@ -57,57 +57,54 @@ function DocumentoCard({ doc }: { doc: DocumentoResumo }) {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-medium">
-            {TIPO_LABEL[doc.tipo] ?? doc.tipo}
-          </CardTitle>
-          <Badge className={statusCfg.className} variant="outline">
-            {statusCfg.label}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {doc.status === 'REJEITADO' && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>Documento rejeitado. Por favor, envie novamente.</span>
-          </div>
-        )}
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">
+          {TIPO_LABEL[doc.tipo] ?? doc.tipo}
+        </p>
+        <Badge className={statusCfg.className} variant="outline">
+          {statusCfg.label}
+        </Badge>
+      </div>
 
-        {canUpload && (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={uploading}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Enviando…
-                </>
-              ) : (
-                <>
-                  <Upload className="size-4" />
-                  Enviar documento
-                </>
-              )}
-            </Button>
-          </>
-        )}
-      </CardContent>
-    </Card>
+      {doc.status === 'REJEITADO' && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <AlertCircle className="size-4 shrink-0" />
+          <span>Documento rejeitado. Por favor, envie novamente.</span>
+        </div>
+      )}
+
+      {canUpload && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={handleFileChange}
+            disabled={uploading}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Enviando…
+              </>
+            ) : (
+              <>
+                <Upload className="size-4" />
+                Enviar documento
+              </>
+            )}
+          </Button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -123,38 +120,41 @@ export default function DocumentosPage() {
         </Link>
       </div>
 
-      <h1 className="text-2xl font-semibold tracking-tight">Documentos</h1>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Documentos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading && (
+            <div className="space-y-3">
+              <Skeleton className="h-28 w-full rounded-xl" />
+              <Skeleton className="h-28 w-full rounded-xl" />
+              <Skeleton className="h-28 w-full rounded-xl" />
+            </div>
+          )}
 
-      {isLoading && (
-        <div className="space-y-3">
-          <Skeleton className="h-28 w-full rounded-xl" />
-          <Skeleton className="h-28 w-full rounded-xl" />
-          <Skeleton className="h-28 w-full rounded-xl" />
-        </div>
-      )}
+          {isError && (
+            <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-red-700">
+              <AlertCircle className="size-5 shrink-0" />
+              <p className="text-sm">Não foi possível carregar os documentos. Tente recarregar a página.</p>
+            </div>
+          )}
 
-      {isError && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="flex items-center gap-3 py-6 text-red-700">
-            <AlertCircle className="size-5 shrink-0" />
-            <p className="text-sm">Não foi possível carregar os documentos. Tente recarregar a página.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {data && (
-        <div className="space-y-3">
-          {data.map((doc) => (
-            <DocumentoCard key={doc.id} doc={doc} />
-          ))}
-
-          {data.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">
+          {data && data.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
               Nenhum documento exigido no momento.
             </p>
           )}
-        </div>
-      )}
+
+          {data && data.length > 0 && (
+            <div className="space-y-3">
+              {data.map((doc) => (
+                <DocumentoCard key={doc.id} doc={doc} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

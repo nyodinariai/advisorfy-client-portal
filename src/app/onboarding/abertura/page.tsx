@@ -58,6 +58,8 @@ import {
   useMinutas,
   useAprovarMinuta,
   useSolicitarAlteracaoMinuta,
+  useConfirmarGovbr,
+  useConfirmarAssinaturaCliente,
 } from '@/features/legalizacao/queries';
 import {
   ABERTURA_STATUS_CLIENTE,
@@ -90,6 +92,48 @@ import {
   type MotivoRecusaViabilidade,
   type MinutaContratoSocial,
 } from '@/features/legalizacao/types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rich text renderer — parseia **bold**, \n e listas com • vindos do backend
+// ─────────────────────────────────────────────────────────────────────────────
+
+function parseInline(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
+function RichText({ text, className }: { text: string; className?: string }) {
+  const paragraphs = text.trim().split(/\n{2,}/);
+  return (
+    <div className={cn('space-y-2.5 text-sm leading-relaxed', className)}>
+      {paragraphs.map((para, pi) => {
+        const lines = para.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.every((l) => l.startsWith('•'))) {
+          return (
+            <ul key={pi} className="space-y-1.5 pl-1">
+              {lines.map((line, li) => (
+                <li key={li} className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-muted-foreground">•</span>
+                  <span>{parseInline(line.replace(/^•\s*/, ''))}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={pi}>
+            {lines.map((line, li) => (
+              <span key={li}>{li > 0 && <br />}{parseInline(line)}</span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status helpers (State B)
@@ -1509,12 +1553,9 @@ function EtapaItem({
         </div>
 
         {(isCurrent && !viabilidadeAguardandoCliente) && (
-          <p className={cn(
-            'text-sm',
-            isClientAction ? 'font-medium text-orange-800 dark:text-orange-200' : 'text-blue-700 dark:text-blue-300'
-          )}>
-            {isClientAction ? etapa.instrucoes : 'Nossa equipe está cuidando desta etapa.'}
-          </p>
+          isClientAction && etapa.instrucoes
+            ? <RichText text={etapa.instrucoes} className="text-orange-800 dark:text-orange-200 font-medium" />
+            : <p className="text-sm text-blue-700 dark:text-blue-300">Nossa equipe está cuidando desta etapa.</p>
         )}
 
         {viabilidadeRespostaEmAnalise && (
@@ -2731,13 +2772,25 @@ function buildProcessoSteps(
   comentarios: ComentarioResponse[] = []
 ): ProcessoStep[] {
   const etapas = [...(abertura.etapas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
-  return [
+  const steps: ProcessoStep[] = [
     { id: 'FORMULARIO', label: 'Formulário', state: getFormularioState(abertura, estrutura) },
     { id: 'VALIDACAO', label: 'Validação', state: getValidacaoState(abertura) },
     { id: 'DOCUMENTOS', label: 'Documentos', state: getDocumentosState(abertura) },
-    { id: 'TRAMITACAO', label: 'Tramitação', state: getTramitacaoState(etapas, estrutura, comentarios), etapas },
-    { id: 'CONCLUSAO', label: 'Conclusão', state: abertura.status === 'CONCLUIDA' ? 'done' as const : 'pending' as const },
   ];
+  if (etapas.length > 0) {
+    for (const etapa of etapas) {
+      steps.push({
+        id: `ETAPA_${etapa.id}`,
+        label: etapa.label,
+        state: etapaToStepState(etapa, estrutura, comentarios),
+        etapas: [etapa],
+      });
+    }
+  } else {
+    steps.push({ id: 'TRAMITACAO', label: 'Tramitação', state: 'pending' });
+  }
+  steps.push({ id: 'CONCLUSAO', label: 'Conclusão', state: abertura.status === 'CONCLUIDA' ? 'done' as const : 'pending' as const });
+  return steps;
 }
 
 function getInitialStep(steps: ProcessoStep[]): string {
@@ -2767,7 +2820,7 @@ function ProcessoStepper({
             <button
               type="button"
               onClick={() => onSelect(step.id)}
-              className="flex min-w-[72px] flex-col items-center gap-2"
+              className="flex min-w-18 flex-col items-center gap-2"
             >
               <div
                 className={cn(
@@ -2807,20 +2860,18 @@ function ProcessoStepper({
 
 function MensagensAssessoria({ comentarios }: { comentarios: ComentarioResponse[] }) {
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2">
-        <MessageSquare className="size-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Mensagens da sua assessoria</h2>
-      </div>
-      {comentarios.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Nenhuma mensagem ainda.
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="divide-y pt-4">
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="size-5 text-muted-foreground" />
+          <CardTitle className="text-base">Mensagens da sua assessoria</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {comentarios.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>
+        ) : (
+          <div className="divide-y">
             {comentarios
               .slice()
               .sort((a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime())
@@ -2829,10 +2880,10 @@ function MensagensAssessoria({ comentarios }: { comentarios: ComentarioResponse[
                   <Comentario c={c} />
                 </div>
               ))}
-          </CardContent>
-        </Card>
-      )}
-    </section>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2943,6 +2994,328 @@ function MinutaAprovacaoCard({
   return null;
 }
 
+function GovbrConfirmacaoCard({
+  govbrOpcao,
+  onConfirmar,
+}: {
+  govbrOpcao: 'GOV_BR' | 'E_CPF' | null;
+  onConfirmar: (opcao: 'GOV_BR' | 'E_CPF') => void;
+}) {
+  const [selecionada, setSelecionada] = useState<'GOV_BR' | 'E_CPF' | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  if (govbrOpcao) {
+    const label = govbrOpcao === 'GOV_BR' ? 'Conta GOV.BR Prata/Ouro' : 'Certificado Digital e-CPF';
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+        <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+        <div>
+          <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+            Opção confirmada: {label}
+          </p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+            Aguardando confirmação do escritório para prosseguir.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const labelSelecionada = selecionada === 'GOV_BR' ? 'Conta GOV.BR Prata/Ouro' : 'Certificado Digital e-CPF';
+
+  return (
+    <>
+      <div className="space-y-4 rounded-lg border p-4">
+        <p className="text-sm font-semibold">Qual opção você utilizará para assinar?</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setSelecionada('GOV_BR')}
+            className={cn(
+              'flex-1 rounded-lg border-2 px-4 py-3 text-left transition-colors',
+              selecionada === 'GOV_BR'
+                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-300/60 dark:bg-blue-900/30 dark:border-blue-400'
+                : 'border-blue-200 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-50 dark:bg-blue-900/10 dark:border-blue-800'
+            )}
+          >
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">✅ Conta GOV.BR</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Nível Prata ou Ouro — opção gratuita</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelecionada('E_CPF')}
+            className={cn(
+              'flex-1 rounded-lg border-2 px-4 py-3 text-left transition-colors',
+              selecionada === 'E_CPF'
+                ? 'border-slate-500 bg-slate-100 ring-2 ring-slate-300/60 dark:bg-slate-700/40 dark:border-slate-400'
+                : 'border-slate-200 bg-slate-50/50 hover:border-slate-400 hover:bg-slate-50 dark:bg-slate-800/20 dark:border-slate-700'
+            )}
+          >
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">💳 Certificado e-CPF</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">ICP-Brasil A1 — arquivo digital</p>
+          </button>
+        </div>
+        <Button
+          size="sm"
+          disabled={!selecionada}
+          onClick={() => setDialogOpen(true)}
+        >
+          Confirmar opção
+        </Button>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar opção de assinatura</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Você selecionou <span className="font-semibold text-foreground">{labelSelecionada}</span> como método
+            de assinatura digital. Deseja confirmar esta escolha?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Caso precise mudar de opção, entre em contato com o escritório.
+          </p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={() => { onConfirmar(selecionada!); setDialogOpen(false) }}>
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function EtapaDetalhePanel({
+  etapa,
+  abertura,
+  estrutura,
+  minutas,
+  onAprovarMinuta,
+  onSolicitarAlteracaoMinuta,
+  onConfirmarGovbr,
+  onConfirmarAssinaturaCliente,
+}: {
+  etapa: EtapaResponse;
+  abertura: AberturaResponse;
+  estrutura?: AberturaEstruturaResponse;
+  minutas?: MinutaContratoSocial[];
+  onAprovarMinuta?: () => void;
+  onSolicitarAlteracaoMinuta?: (obs: string) => void;
+  onConfirmarGovbr?: (opcao: 'GOV_BR' | 'E_CPF') => void;
+  onConfirmarAssinaturaCliente?: () => void;
+}) {
+  const allEtapas = [...(abertura.etapas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
+  const isViabilidade = etapa.etapa === 'CONSULTA_VIABILIDADE';
+  const viabilidadeAguardandoCliente = isViabilidade && etapa.viabilidadeStatus === 'AGUARDANDO_CLIENTE';
+  const ultimaRecusa = viabilidadeAguardandoCliente
+    ? [...(etapa.eventos ?? [])].reverse().find((ev) => ev.tipo === 'RECUSA') ?? null
+    : null;
+  const respostaViabilidadeEnviada = isViabilidade
+    ? hasRespostaViabilidadeEnviada(etapa, estrutura, abertura.comentarios)
+    : false;
+
+  const hasAprovacaoMinutaEtapa = allEtapas.some(e => e.etapa === 'APROVACAO_MINUTA');
+  const isMinuta = etapa.etapa === 'APROVACAO_MINUTA'
+    || (etapa.etapa === 'ELABORACAO_CONTRATO_SOCIAL' && !hasAprovacaoMinutaEtapa);
+  const minutaAtiva = (minutas ?? []).find(m => m.status !== 'SUBSTITUIDA');
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-start gap-2">
+          <h2 className="flex-1 text-xl font-bold leading-tight">{etapa.label}</h2>
+          <div className="flex flex-wrap gap-1.5">
+            <EtapaStatusBadge status={etapa.status} />
+            <Badge variant="outline" className={cn(
+              'border-border',
+              etapa.responsavel === 'CLIENTE'
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                : 'bg-muted text-muted-foreground'
+            )}>
+              {etapa.responsavel === 'CLIENTE' ? 'Aguarda você' : 'Escritório'}
+            </Badge>
+          </div>
+        </div>
+        {etapa.concluidaEm && (
+          <p className="text-sm text-muted-foreground">Concluída em {formatDate(etapa.concluidaEm)}</p>
+        )}
+      </div>
+
+      <Separator />
+
+      {etapa.instrucoes && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Instruções</p>
+          <RichText text={etapa.instrucoes} />
+        </div>
+      )}
+
+      {viabilidadeAguardandoCliente && ultimaRecusa && (
+        <ViabilidadeRecusaCard
+          aberturaId={abertura.id}
+          evento={ultimaRecusa}
+          etapaId={etapa.id}
+          estrutura={estrutura}
+          respostaEnviada={respostaViabilidadeEnviada}
+        />
+      )}
+
+      {isViabilidade && (etapa.eventos ?? []).length > 0 && !viabilidadeAguardandoCliente && (
+        <ViabilidadeHistoricoPanel eventos={etapa.eventos} />
+      )}
+
+      {isMinuta && minutaAtiva && onAprovarMinuta && onSolicitarAlteracaoMinuta && (
+        <MinutaAprovacaoCard
+          minutas={minutas ?? []}
+          aberturaId={abertura.id}
+          onAprovar={onAprovarMinuta}
+          onSolicitarAlteracao={onSolicitarAlteracaoMinuta}
+        />
+      )}
+
+      {etapa.etapa === 'VERIFICACAO_GOV_BR'
+        && etapa.status === 'EM_ANDAMENTO'
+        && onConfirmarGovbr
+        && (
+        <GovbrConfirmacaoCard
+          govbrOpcao={etapa.govbrOpcao ?? null}
+          onConfirmar={onConfirmarGovbr}
+        />
+      )}
+
+      {etapa.etapa === 'ENVIO_PROTOCOLO' && etapa.assinaturaProtocolo && (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          <div>
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">Protocolo de assinatura</p>
+            <p className="mt-0.5 font-mono text-sm text-emerald-700 dark:text-emerald-300">{etapa.assinaturaProtocolo}</p>
+          </div>
+        </div>
+      )}
+
+      {etapa.etapa === 'PROTOCOLO_JUCEPAR' && etapa.assinaturaProtocolo && (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          <div>
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">Protocolo JUCEPAR</p>
+            <p className="mt-0.5 font-mono text-sm text-emerald-700 dark:text-emerald-300">{etapa.assinaturaProtocolo}</p>
+          </div>
+        </div>
+      )}
+
+      {etapa.etapa === 'ASSINATURA_DIGITAL'
+        && etapa.status === 'EM_ANDAMENTO'
+        && onConfirmarAssinaturaCliente
+        && (() => {
+          const protocolo = allEtapas.find(e => e.etapa === 'ENVIO_PROTOCOLO')?.assinaturaProtocolo ?? null;
+          return (
+            <AssinaturaDigitalClienteCard
+              protocolo={protocolo}
+              clienteAssinou={etapa.assinaturaClienteAssinou}
+              onConfirmar={onConfirmarAssinaturaCliente}
+            />
+          );
+        })()}
+
+      {isViabilidade && etapa.status === 'CONCLUIDA' && (() => {
+        const conclusao = (etapa.eventos ?? []).slice().reverse().find((ev) => ev.tipo === 'CONCLUSAO');
+        if (!conclusao?.dados) return null;
+        try {
+          const dados = JSON.parse(conclusao.dados) as ConclusaoDados;
+          if (!dados.numeroProtocolo) return null;
+          return (
+            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="size-4" />
+              Protocolo: <span className="font-mono font-medium">{dados.numeroProtocolo}</span>
+            </div>
+          );
+        } catch { return null; }
+      })()}
+
+      {etapa.observacao && etapa.status === 'CONCLUIDA' && !isViabilidade && (
+        <p className="text-sm text-muted-foreground">{etapa.observacao}</p>
+      )}
+    </div>
+  );
+}
+
+function AssinaturaDigitalClienteCard({
+  protocolo,
+  clienteAssinou,
+  onConfirmar,
+}: {
+  protocolo: string | null;
+  clienteAssinou: boolean;
+  onConfirmar: () => void;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assinatura Digital</p>
+
+      <div className="space-y-2">
+        {protocolo ? (
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-sm font-medium">Protocolo de assinatura</p>
+              <p className="mt-0.5 font-mono text-sm text-muted-foreground">{protocolo}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="size-4 shrink-0 rounded-full border-2 border-muted-foreground/30" />
+            Aguardando o protocolo do escritório…
+          </div>
+        )}
+
+        {protocolo && !clienteAssinou && (
+          <div className="flex items-start gap-2 pl-6">
+            <div className="mt-0.5 size-4 shrink-0 rounded-full border-2 border-amber-400 bg-amber-50" />
+            <div className="space-y-2">
+              <p className="text-sm">
+                Acesse <span className="font-medium">empresafacil.pr.gov.br</span> com sua conta GOV.BR, localize o processo pelo protocolo acima e assine digitalmente. Depois confirme aqui.
+              </p>
+              <Button size="sm" onClick={() => setDialogOpen(true)}>
+                Confirmar que assinei
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {clienteAssinou && (
+          <div className="flex items-center gap-2 pl-6">
+            <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+            <p className="text-sm text-muted-foreground">Sua assinatura foi confirmada</p>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar assinatura</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Confirme que você já realizou a assinatura digital do contrato social
+            {protocolo && <> utilizando o protocolo <span className="font-mono font-semibold text-foreground">{protocolo}</span></>}.
+          </p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={() => { onConfirmar(); setDialogOpen(false); }}>
+              Confirmar assinatura
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function TramitacaoPanel({
   etapas,
   abertura,
@@ -2950,6 +3323,8 @@ function TramitacaoPanel({
   minutas,
   onAprovarMinuta,
   onSolicitarAlteracaoMinuta,
+  onConfirmarGovbr,
+  onConfirmarAssinaturaCliente,
 }: {
   etapas: EtapaResponse[];
   abertura: AberturaResponse;
@@ -2957,8 +3332,19 @@ function TramitacaoPanel({
   minutas?: MinutaContratoSocial[];
   onAprovarMinuta?: () => void;
   onSolicitarAlteracaoMinuta?: (obs: string) => void;
+  onConfirmarGovbr?: (opcao: 'GOV_BR' | 'E_CPF') => void;
+  onConfirmarAssinaturaCliente?: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(() => {
+    // Se há minuta pendente e não existe etapa APROVACAO_MINUTA, priorizar ELABORACAO_CONTRATO_SOCIAL
+    const minutaAtivaPendente = (minutas ?? []).find(
+      m => m.status !== 'SUBSTITUIDA' && m.status === 'AGUARDANDO_APROVACAO'
+    );
+    const temAprovacaoMinuta = etapas.some(e => e.etapa === 'APROVACAO_MINUTA');
+    if (minutaAtivaPendente && !temAprovacaoMinuta) {
+      const elaboracao = etapas.find(e => e.etapa === 'ELABORACAO_CONTRATO_SOCIAL');
+      if (elaboracao) return elaboracao.id;
+    }
     const first = etapas.find((e) => e.status !== 'CONCLUIDA' && e.status !== 'PULADA');
     return first?.id ?? etapas[etapas.length - 1]?.id ?? null;
   });
@@ -2985,7 +3371,9 @@ function TramitacaoPanel({
     ? hasRespostaViabilidadeEnviada(selectedEtapa, estrutura, abertura.comentarios)
     : false;
 
-  const isMinuta = selectedEtapa.etapa === 'APROVACAO_MINUTA';
+  const hasAprovacaoMinutaEtapa = etapas.some(e => e.etapa === 'APROVACAO_MINUTA');
+  const isMinuta = selectedEtapa.etapa === 'APROVACAO_MINUTA'
+    || (selectedEtapa.etapa === 'ELABORACAO_CONTRATO_SOCIAL' && !hasAprovacaoMinutaEtapa);
   const minutaAtiva = (minutas ?? []).find(m => m.status !== 'SUBSTITUIDA');
 
   return (
@@ -3030,7 +3418,7 @@ function TramitacaoPanel({
                       ) : null}
                     </div>
                     {!isLast && (
-                      <div className={cn('mt-1 w-px flex-1 min-h-[28px]', isDone ? 'bg-emerald-400' : 'bg-border')} />
+                      <div className={cn('mt-1 w-px flex-1 min-h-7', isDone ? 'bg-emerald-400' : 'bg-border')} />
                     )}
                   </div>
                   <div className="min-w-0 py-3">
@@ -3094,7 +3482,7 @@ function TramitacaoPanel({
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Instruções
               </p>
-              <p className="text-sm leading-relaxed">{selectedEtapa.instrucoes}</p>
+              <RichText text={selectedEtapa.instrucoes} />
             </div>
           )}
 
@@ -3118,6 +3506,27 @@ function TramitacaoPanel({
               aberturaId={abertura.id}
               onAprovar={onAprovarMinuta}
               onSolicitarAlteracao={onSolicitarAlteracaoMinuta}
+            />
+          )}
+
+          {selectedEtapa.etapa === 'VERIFICACAO_GOV_BR'
+            && selectedEtapa.status === 'EM_ANDAMENTO'
+            && onConfirmarGovbr
+            && (
+            <GovbrConfirmacaoCard
+              govbrOpcao={selectedEtapa.govbrOpcao ?? null}
+              onConfirmar={onConfirmarGovbr}
+            />
+          )}
+
+          {selectedEtapa.etapa === 'ASSINATURA_DIGITAL'
+            && selectedEtapa.status === 'EM_ANDAMENTO'
+            && onConfirmarAssinaturaCliente
+            && (
+            <AssinaturaDigitalClienteCard
+              protocolo={etapas.find(e => e.etapa === 'ENVIO_PROTOCOLO')?.assinaturaProtocolo ?? null}
+              clienteAssinou={selectedEtapa.assinaturaClienteAssinou}
+              onConfirmar={onConfirmarAssinaturaCliente}
             />
           )}
 
@@ -3156,6 +3565,8 @@ function ProcessoStepPanel({
   minutas,
   onAprovarMinuta,
   onSolicitarAlteracaoMinuta,
+  onConfirmarGovbr,
+  onConfirmarAssinaturaCliente,
 }: {
   step: ProcessoStep;
   abertura: AberturaResponse;
@@ -3167,6 +3578,8 @@ function ProcessoStepPanel({
   minutas?: MinutaContratoSocial[];
   onAprovarMinuta?: () => void;
   onSolicitarAlteracaoMinuta?: (obs: string) => void;
+  onConfirmarGovbr?: (opcao: 'GOV_BR' | 'E_CPF') => void;
+  onConfirmarAssinaturaCliente?: () => void;
 }) {
   if (step.id === 'FORMULARIO') {
     return (
@@ -3268,16 +3681,29 @@ function ProcessoStepPanel({
     );
   }
 
-  if (step.id === 'TRAMITACAO') {
+  if (step.id.startsWith('ETAPA_')) {
+    const etapa = step.etapas![0];
     return (
-      <TramitacaoPanel
-        etapas={step.etapas ?? []}
+      <EtapaDetalhePanel
+        etapa={etapa}
         abertura={abertura}
         estrutura={estrutura}
         minutas={minutas}
         onAprovarMinuta={onAprovarMinuta}
         onSolicitarAlteracaoMinuta={onSolicitarAlteracaoMinuta}
+        onConfirmarGovbr={onConfirmarGovbr}
+        onConfirmarAssinaturaCliente={onConfirmarAssinaturaCliente}
       />
+    );
+  }
+
+  if (step.id === 'TRAMITACAO') {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          As etapas de tramitação serão iniciadas após a aprovação do formulário.
+        </CardContent>
+      </Card>
     );
   }
 
@@ -3293,6 +3719,8 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
   const { mutateAsync: enviarDoc } = useEnviarDocumentoAbertura();
   const { mutate: aprovarMinutaMutate } = useAprovarMinuta();
   const { mutate: solicitarAlteracaoMutate } = useSolicitarAlteracaoMinuta();
+  const { mutate: confirmarGovbrMutate } = useConfirmarGovbr();
+  const { mutate: confirmarAssinaturaMutate } = useConfirmarAssinaturaCliente();
   const { mutate: marcarLidos } = useMarcarComentariosLidos('abertura');
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
@@ -3376,18 +3804,24 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
         onSelect={setSelectedStepId}
       />
 
-      <ProcessoStepPanel
-        step={activeStep}
-        abertura={abertura}
-        estrutura={estrutura}
-        estruturaLoading={estruturaLoading}
-        docCliente={docCliente}
-        docAdmin={docAdmin}
-        onEnviarDoc={(docId, url) => enviarDoc({ aberturaId: abertura.id, docId, urlArquivo: url })}
-        minutas={minutasData}
-        onAprovarMinuta={() => { aprovarMinutaMutate(abertura.id); toast.success('Minuta aprovada!') }}
-        onSolicitarAlteracaoMinuta={obs => { solicitarAlteracaoMutate({ aberturaId: abertura.id, observacoes: obs }); toast.success('Solicitação enviada ao escritório') }}
-      />
+      <Card>
+        <CardContent className="pt-6 pb-8">
+          <ProcessoStepPanel
+            step={activeStep}
+            abertura={abertura}
+            estrutura={estrutura}
+            estruturaLoading={estruturaLoading}
+            docCliente={docCliente}
+            docAdmin={docAdmin}
+            onEnviarDoc={(docId, url) => enviarDoc({ aberturaId: abertura.id, docId, urlArquivo: url })}
+            minutas={minutasData}
+            onAprovarMinuta={() => { aprovarMinutaMutate(abertura.id); toast.success('Minuta aprovada!') }}
+            onSolicitarAlteracaoMinuta={obs => { solicitarAlteracaoMutate({ aberturaId: abertura.id, observacoes: obs }); toast.success('Solicitação enviada ao escritório') }}
+            onConfirmarGovbr={opcao => { confirmarGovbrMutate({ aberturaId: abertura.id, opcao }); toast.success('Confirmação enviada!') }}
+            onConfirmarAssinaturaCliente={() => { confirmarAssinaturaMutate(abertura.id); toast.success('Assinatura confirmada!') }}
+          />
+        </CardContent>
+      </Card>
 
       <MensagensAssessoria comentarios={comentariosVisiveis} />
     </div>

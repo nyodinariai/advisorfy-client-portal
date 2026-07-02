@@ -16,6 +16,8 @@ import {
   fetchMinutas,
   aprovarMinuta,
   solicitarAlteracaoMinuta,
+  confirmarGovbr,
+  confirmarAssinaturaCliente,
 } from './api';
 import type { AberturaInput, ResponderCorrecaoInput } from './types';
 
@@ -165,6 +167,27 @@ export function useSolicitarAlteracaoMinuta() {
       solicitarAlteracaoMinuta(aberturaId, observacoes),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['abertura-minutas', vars.aberturaId] });
+    },
+  });
+}
+
+export function useConfirmarAssinaturaCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarAssinaturaCliente(aberturaId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
+    },
+  });
+}
+
+export function useConfirmarGovbr() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, opcao }: { aberturaId: string; opcao: 'GOV_BR' | 'E_CPF' }) =>
+      confirmarGovbr(aberturaId, opcao),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
     },
   });
 }
