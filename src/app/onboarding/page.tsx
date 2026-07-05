@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/query-keys';
+import { uploadFile } from '@/lib/upload';
 import { useAuth } from '@/hooks/useAuth';
 import { leadPortalService } from '@/services/leadPortal';
 import type { DocumentoResumo, TipoDocumento } from '@/types/leadPortal';
@@ -49,12 +50,13 @@ const PLANO_LABELS: Record<string, string> = {
 // KYC document row
 // ---------------------------------------------------------------------------
 
-function DocumentRow({ doc, leadId }: { doc: DocumentoResumo; leadId: string }) {
+function DocumentRow({ doc }: { doc: DocumentoResumo }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const queryClient = useQueryClient();
   const tipoDocumento = doc.tipoDocumento ?? doc.tipo ?? 'OUTRO';
 
-  const { mutate, isPending } = useMutation({
+  const { mutate, isPending: enviando } = useMutation({
     mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
       leadPortalService.enviarDocumento(docId, urlArquivo),
     onSuccess: () => {
@@ -65,13 +67,21 @@ function DocumentRow({ doc, leadId }: { doc: DocumentoResumo; leadId: string }) 
   });
 
   const canUpload = doc.status === 'PENDENTE' || doc.status === 'REJEITADO';
+  const isPending = uploading || enviando;
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const urlArquivo = `https://storage.accountos.com.br/leads/${leadId}/${doc.id}/${encodeURIComponent(file.name)}`;
-    mutate({ docId: doc.id, urlArquivo });
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setUploading(true);
+    try {
+      const urlArquivo = await uploadFile(file);
+      mutate({ docId: doc.id, urlArquivo });
+    } catch {
+      toast.error('Erro ao enviar documento. Tente novamente.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   }
 
   const statusClass: Record<string, string> = {
@@ -252,7 +262,7 @@ export default function OnboardingPage() {
           <CardContent>
             <div className="divide-y">
               {data.documentos.map((doc) => (
-                <DocumentRow key={doc.id} doc={doc} leadId={data.leadId ?? data.id} />
+                <DocumentRow key={doc.id} doc={doc} />
               ))}
             </div>
           </CardContent>

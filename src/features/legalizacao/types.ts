@@ -1,4 +1,34 @@
-export type EtapaStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'PULADA';
+export type EtapaStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'PULADA' | 'DISPENSADA';
+
+export type VistoriaBombeirosSubStatus =
+  | 'AGUARDANDO_PAGAMENTO'
+  | 'AGUARDANDO_AGENDAMENTO'
+  | 'AGUARDANDO_VISTORIA'
+  | 'AGUARDANDO_RESULTADO'
+  | 'APROVADA'
+  | 'REPROVADA'
+  | 'AGUARDANDO_CORRECOES';
+
+export interface AnexoLegalizacao {
+  id: string;
+  contexto: string;
+  nome: string;
+  url: string;
+  tipoMime: string | null;
+  criadoEm: string;
+}
+
+export interface VistoriaBombeiros {
+  id: string;
+  tentativa: number;
+  subStatus: VistoriaBombeirosSubStatus;
+  guiaDispensada: boolean;
+  protocoloNumero: string | null;
+  protocoloLink: string | null;
+  dataAgendada: string | null;
+  naoConformidades: string | null;
+  concluidaEm: string | null;
+}
 export type DocumentoStatus = 'PENDENTE' | 'ENVIADO' | 'APROVADO' | 'REJEITADO';
 
 export type AberturaStatus =
@@ -44,6 +74,24 @@ export interface EtapaResponse {
   assinaturaClienteAssinou: boolean;
   assinaturaAdminAssinou: boolean;
   assinaturaUrlContrato: string | null;
+  vistoriaAtual: VistoriaBombeiros | null;
+  anexos: AnexoLegalizacao[];
+  certificadoDigital: CertificadoDigital | null;
+}
+
+export interface CertificadoDigital {
+  id: string;
+  cnpj: string;
+  tipo: string;
+  nomeArquivo: string;
+  titular: string | null;
+  emissor: string | null;
+  numeroSerie: string | null;
+  validoDe: string;
+  validoAte: string;
+  status: 'ATIVO' | 'SUBSTITUIDO' | 'REVOGADO';
+  vencido: boolean;
+  criadoEm: string;
 }
 
 export interface ComentarioResponse {

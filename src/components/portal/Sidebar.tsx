@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Building2,
   ChevronDown,
+  Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/calendario', label: 'Calendário', icon: CalendarDays },
   { href: '/notas-fiscais', label: 'Notas Fiscais', icon: FileText },
   { href: '/impostos', label: 'Impostos & Guias', icon: Receipt },
+  { href: '/mensalidades', label: 'Mensalidades', icon: Wallet },
   { href: '/folha', label: 'Folha de Pagamento', icon: Users },
   { href: '/demonstracoes', label: 'Demonstrações', icon: BarChart3 },
   { href: '/obrigacoes', label: 'Obrigações', icon: ClipboardList },

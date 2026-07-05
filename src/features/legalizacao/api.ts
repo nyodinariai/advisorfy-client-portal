@@ -7,6 +7,7 @@ import type {
   AberturaInput,
   ResponderCorrecaoInput,
   MinutaContratoSocial,
+  CertificadoDigital,
 } from './types';
 
 export async function fetchMinhaAbertura(): Promise<AberturaResponse | null> {
@@ -167,4 +168,44 @@ export async function confirmarGovbr(
     `/api/client/legalizacao/abertura/${aberturaId}/etapas/verificacao-govbr/confirmar`,
     { opcao }
   );
+}
+
+export async function confirmarProntidaoVistoria(aberturaId: string): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/etapas/vistoria-bombeiros/confirmar-prontidao`
+  );
+}
+
+export async function confirmarCorrecoesVistoria(aberturaId: string): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/etapas/vistoria-bombeiros/confirmar-correcoes`
+  );
+}
+
+export async function enviarComprovantePagamento(
+  aberturaId: string,
+  etapaId: string,
+  url: string,
+  nome: string
+): Promise<void> {
+  await api.post(
+    `/api/client/legalizacao/abertura/${aberturaId}/etapas/${etapaId}/comprovante-pagamento`,
+    { url, nome }
+  );
+}
+
+export async function enviarCertificadoDigital(
+  aberturaId: string,
+  file: File,
+  senha: string
+): Promise<CertificadoDigital> {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('senha', senha);
+  const { data } = await api.post<CertificadoDigital>(
+    `/api/client/legalizacao/abertura/${aberturaId}/certificado-digital`,
+    body,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
 }

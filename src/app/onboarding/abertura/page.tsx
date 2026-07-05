@@ -8,8 +8,10 @@ import { z } from 'zod';
 import {
   ArrowLeft,
   ArrowRight,
+  Ban,
   Check,
   CheckCircle2,
+  Clock,
   Loader2,
   Upload,
   AlertCircle,
@@ -21,6 +23,7 @@ import {
   Plus,
   Pencil,
   TriangleAlert,
+  Download,
   FileText,
   FileSignature,
   XCircle,
@@ -43,7 +46,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatCnpj } from '@/lib/format';
+import { uploadFile } from '@/lib/upload';
 import { Separator } from '@/components/ui/separator';
 import {
   useMinhaAbertura,
@@ -60,6 +64,10 @@ import {
   useSolicitarAlteracaoMinuta,
   useConfirmarGovbr,
   useConfirmarAssinaturaCliente,
+  useConfirmarProntidaoVistoria,
+  useConfirmarCorrecoesVistoria,
+  useEnviarCertificadoDigital,
+  useEnviarComprovantePagamento,
 } from '@/features/legalizacao/queries';
 import {
   ABERTURA_STATUS_CLIENTE,
@@ -91,6 +99,9 @@ import {
   type TipoEventoEtapa,
   type MotivoRecusaViabilidade,
   type MinutaContratoSocial,
+  type VistoriaBombeiros,
+  type AnexoLegalizacao,
+  type CertificadoDigital,
 } from '@/features/legalizacao/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1613,9 +1624,9 @@ function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: st
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const urlArquivo = `/uploads/legalizacao/${doc.id}/${encodeURIComponent(file.name)}`;
     setUploading(true);
     try {
+      const urlArquivo = await uploadFile(file);
       await onEnviar(doc.id, urlArquivo);
       toast.success('Documento enviado com sucesso!');
     } catch {
@@ -1669,7 +1680,7 @@ function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: st
   );
 }
 
-function DocsSection({ title, docs, onEnviar, adminMode }: { title: string; docs: DocumentoResumo[]; onEnviar?: (docId: string, urlArquivo: string) => Promise<unknown>; adminMode?: boolean }) {
+function DocsSection({ title, docs, onEnviar }: { title: string; docs: DocumentoResumo[]; onEnviar?: (docId: string, urlArquivo: string) => Promise<unknown> }) {
   if (docs.length === 0) return null;
   const grouped = docs.reduce<Record<string, DocumentoResumo[]>>((acc, doc) => {
     const key = BLOCO_LABEL_CLIENTE[doc.bloco] ?? doc.bloco;
@@ -1684,20 +1695,9 @@ function DocsSection({ title, docs, onEnviar, adminMode }: { title: string; docs
       {Object.entries(grouped).map(([bloco, blocosDocs]) => (
         <div key={bloco} className="space-y-2">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">{bloco}</p>
-          {adminMode ? (
-            <div className="divide-y rounded-lg border">
-              {blocosDocs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm">{doc.descricao ?? doc.tipoDocumento}</span>
-                  <Badge variant="outline" className={DOC_STATUS_CLASS[doc.status]}>{DOC_STATUS_LABEL[doc.status]}</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {blocosDocs.map((doc) => <DocCard key={doc.id} doc={doc} onEnviar={onEnviar!} />)}
-            </div>
-          )}
+          <div className="space-y-2">
+            {blocosDocs.map((doc) => <DocCard key={doc.id} doc={doc} onEnviar={onEnviar!} />)}
+          </div>
         </div>
       ))}
     </section>
@@ -2777,8 +2777,11 @@ function buildProcessoSteps(
     { id: 'VALIDACAO', label: 'Validação', state: getValidacaoState(abertura) },
     { id: 'DOCUMENTOS', label: 'Documentos', state: getDocumentosState(abertura) },
   ];
-  if (etapas.length > 0) {
-    for (const etapa of etapas) {
+  // A etapa CONCLUIDA do backend não vira um passo próprio para o cliente —
+  // seu conteúdo é consolidado no passo sintético "Conclusão" ao final.
+  const etapasVisiveis = etapas.filter((e) => e.etapa !== 'CONCLUIDA');
+  if (etapasVisiveis.length > 0) {
+    for (const etapa of etapasVisiveis) {
       steps.push({
         id: `ETAPA_${etapa.id}`,
         label: etapa.label,
@@ -2789,7 +2792,17 @@ function buildProcessoSteps(
   } else {
     steps.push({ id: 'TRAMITACAO', label: 'Tramitação', state: 'pending' });
   }
-  steps.push({ id: 'CONCLUSAO', label: 'Conclusão', state: abertura.status === 'CONCLUIDA' ? 'done' as const : 'pending' as const });
+  const etapaConclusao = etapas.find((e) => e.etapa === 'CONCLUIDA');
+  steps.push({
+    id: 'CONCLUSAO',
+    label: 'Conclusão',
+    state: abertura.status === 'CONCLUIDA' || etapaConclusao?.status === 'CONCLUIDA'
+      ? 'done'
+      : etapaConclusao?.status === 'EM_ANDAMENTO'
+        ? 'current'
+        : 'pending',
+    etapas: etapaConclusao ? [etapaConclusao] : undefined,
+  });
   return steps;
 }
 
@@ -2893,6 +2906,7 @@ function EtapaStatusBadge({ status }: { status: EtapaStatus }) {
     EM_ANDAMENTO: { label: 'Em andamento', className: 'border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' },
     PENDENTE: { label: 'Pendente', className: 'border-border bg-muted text-muted-foreground' },
     PULADA: { label: 'Ignorada', className: 'border-border bg-muted text-muted-foreground' },
+    DISPENSADA: { label: 'Dispensada', className: 'border-purple-200 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' },
   };
   const c = config[status] ?? config.PENDENTE;
   return <Badge variant="outline" className={c.className}>{c.label}</Badge>;
@@ -3097,6 +3111,10 @@ function EtapaDetalhePanel({
   onSolicitarAlteracaoMinuta,
   onConfirmarGovbr,
   onConfirmarAssinaturaCliente,
+  onConfirmarProntidaoVistoria,
+  onConfirmarCorrecoesVistoria,
+  onEnviarCertificadoDigital,
+  onEnviarComprovante,
 }: {
   etapa: EtapaResponse;
   abertura: AberturaResponse;
@@ -3106,6 +3124,10 @@ function EtapaDetalhePanel({
   onSolicitarAlteracaoMinuta?: (obs: string) => void;
   onConfirmarGovbr?: (opcao: 'GOV_BR' | 'E_CPF') => void;
   onConfirmarAssinaturaCliente?: () => void;
+  onConfirmarProntidaoVistoria?: () => void;
+  onConfirmarCorrecoesVistoria?: () => void;
+  onEnviarCertificadoDigital?: (file: File, senha: string) => Promise<unknown>;
+  onEnviarComprovante?: (etapaId: string, url: string, nome: string) => Promise<unknown>;
 }) {
   const allEtapas = [...(abertura.etapas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
   const isViabilidade = etapa.etapa === 'CONSULTA_VIABILIDADE';
@@ -3206,6 +3228,141 @@ function EtapaDetalhePanel({
         </div>
       )}
 
+      {etapa.etapa === 'AGUARDANDO_CNPJ' && (() => {
+        const cartaoCnpj = (etapa.anexos ?? []).find((a) => a.contexto === 'CARTAO_CNPJ');
+        if (!abertura.cnpjObtido && !cartaoCnpj) return null;
+        return (
+          <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+              <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                Seu CNPJ foi emitido! 🎉
+              </p>
+            </div>
+            {abertura.cnpjObtido && (
+              <p className="font-mono text-lg font-semibold text-emerald-800 dark:text-emerald-300">
+                {formatCnpj(abertura.cnpjObtido)}
+              </p>
+            )}
+            {cartaoCnpj && (
+              <a
+                href={cartaoCnpj.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-blue-600 underline dark:text-blue-400"
+              >
+                Baixar cartão CNPJ ({cartaoCnpj.nome})
+              </a>
+            )}
+          </div>
+        );
+      })()}
+
+      {etapa.etapa === 'LICENCIAMENTO_MUNICIPAL' && (() => {
+        const docs = [
+          { contexto: 'ALVARA_FUNCIONAMENTO', titulo: 'Alvará de Funcionamento' },
+          { contexto: 'INSCRICAO_MUNICIPAL', titulo: 'Inscrição Municipal (ISS)' },
+          { contexto: 'INSCRICAO_ESTADUAL', titulo: 'Inscrição Estadual (ICMS)' },
+          { contexto: 'LICENCA_AMBIENTAL', titulo: 'Licença Ambiental' },
+        ]
+          .map((d) => ({ ...d, anexo: (etapa.anexos ?? []).find((a) => a.contexto === d.contexto) }))
+          .filter((d) => d.anexo);
+        if (docs.length === 0) return null;
+        return (
+          <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+              <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                Licenças disponíveis
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {docs.map((d) => (
+                <a
+                  key={d.contexto}
+                  href={d.anexo!.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 underline dark:text-blue-400"
+                >
+                  Baixar {d.titulo}
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {etapa.etapa === 'OPCAO_SIMPLES_NACIONAL' && (() => {
+        const termo = (etapa.anexos ?? []).find((a) => a.contexto === 'TERMO_OPCAO_SIMPLES');
+        if (etapa.status === 'DISPENSADA') {
+          return (
+            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+              Esta etapa não se aplica: sua empresa optou por outro regime tributário.
+            </div>
+          );
+        }
+        if (termo) {
+          return (
+            <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                  Sua empresa é optante pelo Simples Nacional! 🎉
+                </p>
+              </div>
+              <a
+                href={termo.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-blue-600 underline dark:text-blue-400"
+              >
+                Baixar termo de deferimento ({termo.nome})
+              </a>
+            </div>
+          );
+        }
+        if (etapa.status === 'EM_ANDAMENTO') {
+          return (
+            <div className="flex items-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground">
+              <Clock className="size-4 shrink-0" />
+              O escritório está formalizando a opção junto à Receita Federal. O termo de
+              deferimento ficará disponível aqui.
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {etapa.etapa === 'PAGAMENTO_TAXAS_JUCEPAR' && etapa.status === 'EM_ANDAMENTO' && (
+        <PagamentoTaxasJuceparPanel
+          anexos={etapa.anexos ?? []}
+          onEnviarComprovante={onEnviarComprovante
+            ? (url, nome) => onEnviarComprovante(etapa.id, url, nome)
+            : undefined}
+        />
+      )}
+
+      {etapa.etapa === 'VISTORIA_BOMBEIROS' && etapa.vistoriaAtual && (
+        <VistoriaBombeirosClientePanel
+          vistoria={etapa.vistoriaAtual}
+          anexos={etapa.anexos ?? []}
+          onConfirmarProntidao={etapa.status === 'EM_ANDAMENTO' ? onConfirmarProntidaoVistoria : undefined}
+          onConfirmarCorrecoes={etapa.status === 'EM_ANDAMENTO' ? onConfirmarCorrecoesVistoria : undefined}
+          onEnviarComprovante={onEnviarComprovante && etapa.status === 'EM_ANDAMENTO'
+            ? (url, nome) => onEnviarComprovante(etapa.id, url, nome)
+            : undefined}
+        />
+      )}
+
+      {etapa.etapa === 'OBTENCAO_CERTIFICADO_ECNPJ' && (
+        <CertificadoDigitalClientePanel
+          certificado={etapa.certificadoDigital ?? null}
+          ativo={etapa.status === 'EM_ANDAMENTO'}
+          onEnviar={onEnviarCertificadoDigital}
+        />
+      )}
+
       {etapa.etapa === 'ASSINATURA_DIGITAL'
         && etapa.status === 'EM_ANDAMENTO'
         && onConfirmarAssinaturaCliente
@@ -3238,6 +3395,553 @@ function EtapaDetalhePanel({
       {etapa.observacao && etapa.status === 'CONCLUIDA' && !isViabilidade && (
         <p className="text-sm text-muted-foreground">{etapa.observacao}</p>
       )}
+    </div>
+  );
+}
+
+function CertificadoDigitalClientePanel({
+  certificado,
+  ativo,
+  onEnviar,
+}: {
+  certificado: CertificadoDigital | null;
+  ativo: boolean;
+  onEnviar?: (file: File, senha: string) => Promise<unknown>;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [senha, setSenha] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  const handleEnviar = async () => {
+    if (!file || !senha || !onEnviar) return;
+    setEnviando(true);
+    try {
+      await onEnviar(file, senha);
+      toast.success('Certificado validado e salvo com segurança!');
+      setFile(null);
+      setSenha('');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? 'Erro ao enviar certificado. Tente novamente.');
+    } finally {
+      setEnviando(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  if (certificado) {
+    return (
+      <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+            Certificado digital ativo
+          </p>
+        </div>
+        <div className="grid gap-1 text-sm text-emerald-800 dark:text-emerald-300">
+          {certificado.titular && <p className="truncate">{certificado.titular}</p>}
+          <p>Válido até {formatDate(certificado.validoAte)}</p>
+          {certificado.emissor && <p className="text-xs opacity-80">Emitido por {certificado.emissor}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (!ativo) return null;
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Enviar certificado digital e-CNPJ
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Envie o arquivo do certificado (.pfx ou .p12) e a senha dele. Validamos o
+        arquivo na hora e o guardamos criptografado — ele será usado nas comunicações
+        com a Receita Federal.
+      </p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".pfx,.p12"
+        className="hidden"
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        disabled={enviando}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={enviando}
+          onClick={() => fileRef.current?.click()}
+          className="gap-1.5"
+        >
+          <Upload className="size-3.5" />
+          {file ? 'Trocar arquivo' : 'Selecionar arquivo'}
+        </Button>
+        {file && <span className="truncate text-sm text-muted-foreground">{file.name}</span>}
+      </div>
+      <div className="max-w-xs space-y-1.5">
+        <Label htmlFor="senha-certificado" className="text-xs">Senha do certificado</Label>
+        <Input
+          id="senha-certificado"
+          type="password"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          placeholder="••••••••"
+          disabled={enviando}
+        />
+      </div>
+      <Button size="sm" disabled={!file || !senha || enviando} onClick={handleEnviar} className="gap-1.5">
+        {enviando ? (
+          <><Loader2 className="size-3.5 animate-spin" /> Validando…</>
+        ) : (
+          'Enviar certificado'
+        )}
+      </Button>
+    </div>
+  );
+}
+
+// ── Empresa Aberta: dados da empresa + documentos ────────────────────────────
+
+const DOCS_EMPRESA_ABERTA: ReadonlyArray<{ contexto: string; titulo: string }> = [
+  { contexto: 'CONTRATO_SOCIAL_REGISTRADO', titulo: 'Contrato Social Registrado' },
+  { contexto: 'CARTAO_CNPJ', titulo: 'Cartão CNPJ' },
+  { contexto: 'ALVARA_FUNCIONAMENTO', titulo: 'Alvará de Funcionamento' },
+  { contexto: 'INSCRICAO_MUNICIPAL', titulo: 'Inscrição Municipal (ISS)' },
+  { contexto: 'INSCRICAO_ESTADUAL', titulo: 'Inscrição Estadual (ICMS)' },
+  { contexto: 'LICENCA_AMBIENTAL', titulo: 'Licença Ambiental' },
+  { contexto: 'CERTIFICADO_AVCB', titulo: 'Certificado AVCB/CCCB — Bombeiros' },
+  { contexto: 'TERMO_OPCAO_SIMPLES', titulo: 'Termo de Opção — Simples Nacional' },
+];
+
+// Anexos operacionais que não são documentos finais da empresa
+const CONTEXTOS_INTERNOS = new Set(['GUIA_PAGAMENTO', 'COMPROVANTE_PAGAMENTO']);
+
+const REGIME_LABELS_EMPRESA: Record<string, string> = {
+  SIMPLES_NACIONAL: 'Simples Nacional',
+  LUCRO_PRESUMIDO: 'Lucro Presumido',
+  LUCRO_REAL: 'Lucro Real',
+};
+
+function EmpresaAbertaPanel({ abertura }: { abertura: AberturaResponse }) {
+  const etapas = abertura.etapas ?? [];
+  const todosAnexos = etapas.flatMap((e) => e.anexos ?? []);
+  const nire = etapas.find((e) => e.etapa === 'AGUARDANDO_JUCEPAR')?.assinaturaProtocolo ?? null;
+
+  const termoSimples = todosAnexos.find((a) => a.contexto === 'TERMO_OPCAO_SIMPLES');
+  const regime = termoSimples
+    ? 'Simples Nacional'
+    : abertura.propostaRegime?.regime
+      ? REGIME_LABELS_EMPRESA[abertura.propostaRegime.regime] ?? abertura.propostaRegime.regime
+      : null;
+
+  const docsConhecidos = DOCS_EMPRESA_ABERTA
+    .map((d) => ({ ...d, anexo: todosAnexos.find((a) => a.contexto === d.contexto) }))
+    .filter((d) => d.anexo);
+  const contextosConhecidos = new Set(DOCS_EMPRESA_ABERTA.map((d) => d.contexto));
+  const outrosDocs = todosAnexos.filter(
+    (a) => !contextosConhecidos.has(a.contexto) && !CONTEXTOS_INTERNOS.has(a.contexto)
+  );
+
+  const dados: Array<{ label: string; valor: string | null }> = [
+    { label: 'Razão Social', valor: abertura.razaoSocial ?? null },
+    { label: 'Nome Fantasia', valor: abertura.nomeFantasia ?? null },
+    { label: 'CNPJ', valor: abertura.cnpjObtido ? formatCnpj(abertura.cnpjObtido) : null },
+    { label: 'NIRE', valor: nire },
+    { label: 'Tipo Societário', valor: abertura.tipoSocietario ?? null },
+    {
+      label: 'Capital Social',
+      valor: abertura.capitalSocial != null ? formatCurrency(abertura.capitalSocial) : null,
+    },
+    {
+      label: 'Município/UF',
+      valor: abertura.municipio ? `${abertura.municipio}${abertura.uf ? ` — ${abertura.uf}` : ''}` : null,
+    },
+    { label: 'Regime Tributário', valor: regime },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Dados da empresa */}
+      <div className="rounded-lg border p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Dados da empresa
+        </p>
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+          {dados.filter((d) => d.valor).map((d) => (
+            <div key={d.label}>
+              <dt className="text-xs text-muted-foreground">{d.label}</dt>
+              <dd className={`text-sm font-medium ${d.label === 'CNPJ' || d.label === 'NIRE' ? 'font-mono' : ''}`}>
+                {d.valor}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Documentos */}
+      <div className="rounded-lg border p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Documentos da empresa
+        </p>
+        {docsConhecidos.length === 0 && outrosDocs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Os documentos ficarão disponíveis aqui conforme forem emitidos.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {docsConhecidos.map((d) => (
+              <a
+                key={d.contexto}
+                href={d.anexo!.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
+              >
+                <FileText className="size-4 shrink-0 text-emerald-600" />
+                <span className="flex-1 truncate font-medium">{d.titulo}</span>
+                <Download className="size-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            ))}
+            {outrosDocs.map((a) => (
+              <a
+                key={a.id}
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
+              >
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 truncate">{a.nome}</span>
+                <Download className="size-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ComprovanteUploadButton({ onEnviar }: { onEnviar: (url: string, nome: string) => Promise<unknown> }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      await onEnviar(url, file.name);
+      toast.success('Comprovante enviado!');
+    } catch {
+      toast.error('Erro ao enviar comprovante. Tente novamente.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <>
+      <input ref={fileRef} type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={uploading}
+        onClick={() => fileRef.current?.click()}
+        className="gap-1.5"
+      >
+        {uploading ? (
+          <><Loader2 className="size-3.5 animate-spin" /> Enviando…</>
+        ) : (
+          <><Upload className="size-3.5" /> Enviar comprovante de pagamento</>
+        )}
+      </Button>
+    </>
+  );
+}
+
+function PagamentoTaxasJuceparPanel({
+  anexos,
+  onEnviarComprovante,
+}: {
+  anexos: AnexoLegalizacao[];
+  onEnviarComprovante?: (url: string, nome: string) => Promise<unknown>;
+}) {
+  const guia = anexos.find(a => a.contexto === 'GUIA_PAGAMENTO');
+  const comprovante = anexos.find(a => a.contexto === 'COMPROVANTE_PAGAMENTO');
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Taxa da Junta Comercial</p>
+      <div className="space-y-2">
+        {guia ? (
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-sm font-medium">Guia de pagamento disponível</p>
+              <a
+                href={guia.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-0.5 text-sm text-blue-600 underline dark:text-blue-400"
+              >
+                Baixar guia ({guia.nome})
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="size-4 shrink-0" />
+            Aguardando o escritório disponibilizar a guia de pagamento…
+          </div>
+        )}
+
+        {guia && (
+          comprovante ? (
+            <div className="space-y-1 pl-6">
+              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="size-4 shrink-0" />
+                Comprovante de pagamento enviado
+              </div>
+              <a
+                href={comprovante.url}
+                target="_blank"
+                rel="noreferrer"
+                className="pl-6 text-sm text-blue-600 underline dark:text-blue-400"
+              >
+                {comprovante.nome}
+              </a>
+            </div>
+          ) : (
+            <div className="space-y-2 pl-6">
+              <p className="text-sm text-muted-foreground">
+                Após pagar a guia, envie o comprovante para o escritório dar sequência.
+              </p>
+              {onEnviarComprovante && <ComprovanteUploadButton onEnviar={onEnviarComprovante} />}
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+const VISTORIA_SUB_STATUS_LABELS: Record<VistoriaBombeiros['subStatus'], string> = {
+  AGUARDANDO_PAGAMENTO: 'Aguardando pagamento da taxa',
+  AGUARDANDO_AGENDAMENTO: 'Aguardando agendamento',
+  AGUARDANDO_VISTORIA: 'Vistoria agendada',
+  AGUARDANDO_RESULTADO: 'Aguardando resultado',
+  APROVADA: 'Aprovada',
+  REPROVADA: 'Reprovada — correções necessárias',
+  AGUARDANDO_CORRECOES: 'Aguardando confirmação das correções',
+};
+
+function VistoriaBombeirosClientePanel({
+  vistoria,
+  anexos,
+  onConfirmarProntidao,
+  onConfirmarCorrecoes,
+  onEnviarComprovante,
+}: {
+  vistoria: VistoriaBombeiros;
+  anexos: AnexoLegalizacao[];
+  onConfirmarProntidao?: () => void;
+  onConfirmarCorrecoes?: () => void;
+  onEnviarComprovante?: (url: string, nome: string) => Promise<unknown>;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [correcoesOpen, setCorrecoesOpen] = useState(false);
+
+  const guia = anexos.find((a) => a.contexto === 'GUIA_PAGAMENTO');
+  const comprovante = anexos.find((a) => a.contexto === 'COMPROVANTE_PAGAMENTO');
+  const certificado = anexos.find((a) => a.contexto === 'CERTIFICADO_AVCB');
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Vistoria do Corpo de Bombeiros</p>
+        {vistoria.tentativa > 1 && (
+          <Badge variant="outline" className="text-xs">Tentativa {vistoria.tentativa}</Badge>
+        )}
+      </div>
+
+      <p className="text-sm font-medium">{VISTORIA_SUB_STATUS_LABELS[vistoria.subStatus]}</p>
+
+      {(vistoria.subStatus === 'AGUARDANDO_PAGAMENTO') && (
+        <div className="space-y-2 text-sm text-muted-foreground">
+          {vistoria.guiaDispensada ? (
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="size-4 shrink-0" />
+              Taxa dispensada pelo escritório
+            </div>
+          ) : guia ? (
+            <div className="space-y-1.5">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                <div>
+                  <p className="font-medium text-foreground">Guia da taxa de vistoria disponível</p>
+                  <a
+                    href={guia.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline dark:text-blue-400"
+                  >
+                    Baixar guia ({guia.nome})
+                  </a>
+                </div>
+              </div>
+              <p className="pl-6">
+                Após o pagamento, envie o comprovante para o escritório confirmar e seguir
+                com o agendamento da vistoria.
+              </p>
+              <div className="pl-6">
+                {comprovante ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="size-4 shrink-0" />
+                      Comprovante de pagamento enviado
+                    </div>
+                    <a
+                      href={comprovante.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="pl-6 text-blue-600 underline dark:text-blue-400"
+                    >
+                      {comprovante.nome}
+                    </a>
+                  </div>
+                ) : (
+                  onEnviarComprovante && <ComprovanteUploadButton onEnviar={onEnviarComprovante} />
+                )}
+              </div>
+            </div>
+          ) : (
+            <p>Aguardando o escritório disponibilizar a guia de pagamento da taxa de vistoria.</p>
+          )}
+        </div>
+      )}
+
+      {vistoria.subStatus === 'AGUARDANDO_AGENDAMENTO' && (
+        <p className="text-sm text-muted-foreground">
+          O escritório está providenciando o agendamento da vistoria junto ao Corpo de Bombeiros.
+        </p>
+      )}
+
+      {(vistoria.subStatus === 'AGUARDANDO_VISTORIA' || vistoria.subStatus === 'AGUARDANDO_RESULTADO') && vistoria.protocoloNumero && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-sm font-medium">Protocolo de agendamento</p>
+              <p className="font-mono text-sm text-muted-foreground">{vistoria.protocoloNumero}</p>
+              {vistoria.protocoloLink && (
+                <a href={vistoria.protocoloLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline dark:text-blue-400">
+                  Acompanhar online
+                </a>
+              )}
+            </div>
+          </div>
+          {vistoria.dataAgendada && (
+            <p className="pl-6 text-sm text-muted-foreground">
+              Data agendada: <span className="font-medium">{new Date(vistoria.dataAgendada + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+            </p>
+          )}
+          {vistoria.subStatus === 'AGUARDANDO_VISTORIA' && onConfirmarProntidao && (
+            <div className="pl-6">
+              <Button size="sm" onClick={() => setConfirmOpen(true)}>
+                Confirmar que estou pronto
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {vistoria.subStatus === 'APROVADA' && (
+        <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 p-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+              Vistoria aprovada! 🎉
+            </p>
+          </div>
+          {certificado ? (
+            <a
+              href={certificado.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-blue-600 underline dark:text-blue-400"
+            >
+              Baixar certificado AVCB/CCCB ({certificado.nome})
+            </a>
+          ) : (
+            <p className="text-sm text-emerald-800 dark:text-emerald-300">
+              O certificado AVCB/CCCB será disponibilizado aqui assim que o escritório o anexar.
+            </p>
+          )}
+        </div>
+      )}
+
+      {vistoria.subStatus === 'REPROVADA' && vistoria.naoConformidades && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-300">Não conformidades</p>
+          <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">{vistoria.naoConformidades}</p>
+        </div>
+      )}
+
+      {vistoria.subStatus === 'AGUARDANDO_CORRECOES' && (
+        <div className="space-y-3">
+          {vistoria.naoConformidades && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-300">Pendências a corrigir</p>
+              <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">{vistoria.naoConformidades}</p>
+            </div>
+          )}
+          {onConfirmarCorrecoes && (
+            <Button size="sm" onClick={() => setCorrecoesOpen(true)}>
+              Confirmar que corrigi
+            </Button>
+          )}
+        </div>
+      )}
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar prontidão</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Confirme que o estabelecimento está pronto para receber o vistoriador do Corpo de Bombeiros na data agendada.
+          </p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={() => { onConfirmarProntidao?.(); setConfirmOpen(false); }}>
+              Confirmar prontidão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={correcoesOpen} onOpenChange={setCorrecoesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar correções</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Confirme que todas as pendências levantadas foram corrigidas e o estabelecimento está pronto para uma nova vistoria.
+          </p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={() => { onConfirmarCorrecoes?.(); setCorrecoesOpen(false); }}>
+              Confirmar correções
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3560,26 +4264,32 @@ function ProcessoStepPanel({
   estrutura,
   estruturaLoading,
   docCliente,
-  docAdmin,
   onEnviarDoc,
   minutas,
   onAprovarMinuta,
   onSolicitarAlteracaoMinuta,
   onConfirmarGovbr,
   onConfirmarAssinaturaCliente,
+  onConfirmarProntidaoVistoria,
+  onConfirmarCorrecoesVistoria,
+  onEnviarCertificadoDigital,
+  onEnviarComprovante,
 }: {
   step: ProcessoStep;
   abertura: AberturaResponse;
   estrutura?: AberturaEstruturaResponse;
   estruturaLoading: boolean;
   docCliente: DocumentoResumo[];
-  docAdmin: DocumentoResumo[];
   onEnviarDoc: (docId: string, url: string) => Promise<unknown>;
   minutas?: MinutaContratoSocial[];
   onAprovarMinuta?: () => void;
   onSolicitarAlteracaoMinuta?: (obs: string) => void;
   onConfirmarGovbr?: (opcao: 'GOV_BR' | 'E_CPF') => void;
   onConfirmarAssinaturaCliente?: () => void;
+  onConfirmarProntidaoVistoria?: () => void;
+  onConfirmarCorrecoesVistoria?: () => void;
+  onEnviarCertificadoDigital?: (file: File, senha: string) => Promise<unknown>;
+  onEnviarComprovante?: (etapaId: string, url: string, nome: string) => Promise<unknown>;
 }) {
   if (step.id === 'FORMULARIO') {
     return (
@@ -3648,23 +4358,30 @@ function ProcessoStepPanel({
   }
 
   if (step.id === 'CONCLUSAO') {
+    const etapaConclusao = step.etapas?.[0];
+    const liberada = abertura.status === 'CONCLUIDA'
+      || etapaConclusao?.status === 'EM_ANDAMENTO'
+      || etapaConclusao?.status === 'CONCLUIDA';
     return (
       <div className="space-y-6">
-        {abertura.status === 'CONCLUIDA' && abertura.cnpjObtido ? (
+        {liberada ? (
           <>
-            <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-5 dark:border-emerald-700 dark:bg-emerald-900/20">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-full bg-emerald-500">
-                  <Check className="size-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-semibold text-emerald-900 dark:text-emerald-200">Empresa aberta com sucesso!</p>
-                  <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                    CNPJ: <span className="font-mono font-bold">{abertura.cnpjObtido}</span>
-                  </p>
+            {abertura.cnpjObtido && (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-5 dark:border-emerald-700 dark:bg-emerald-900/20">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-emerald-500">
+                    <Check className="size-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-emerald-900 dark:text-emerald-200">Empresa aberta com sucesso!</p>
+                    <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                      CNPJ: <span className="font-mono font-bold">{formatCnpj(abertura.cnpjObtido)}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+            <EmpresaAbertaPanel abertura={abertura} />
             <ProximosPassosCard />
           </>
         ) : (
@@ -3673,9 +4390,6 @@ function ProcessoStepPanel({
               Esta etapa será liberada quando o CNPJ e os registros finais estiverem concluídos.
             </CardContent>
           </Card>
-        )}
-        {docAdmin.length > 0 && (
-          <DocsSection title="Documentos finais e elaborados pela equipe" docs={docAdmin} adminMode />
         )}
       </div>
     );
@@ -3693,6 +4407,10 @@ function ProcessoStepPanel({
         onSolicitarAlteracaoMinuta={onSolicitarAlteracaoMinuta}
         onConfirmarGovbr={onConfirmarGovbr}
         onConfirmarAssinaturaCliente={onConfirmarAssinaturaCliente}
+        onConfirmarProntidaoVistoria={onConfirmarProntidaoVistoria}
+        onConfirmarCorrecoesVistoria={onConfirmarCorrecoesVistoria}
+        onEnviarCertificadoDigital={onEnviarCertificadoDigital}
+        onEnviarComprovante={onEnviarComprovante}
       />
     );
   }
@@ -3721,6 +4439,10 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
   const { mutate: solicitarAlteracaoMutate } = useSolicitarAlteracaoMinuta();
   const { mutate: confirmarGovbrMutate } = useConfirmarGovbr();
   const { mutate: confirmarAssinaturaMutate } = useConfirmarAssinaturaCliente();
+  const { mutate: confirmarProntidaoVistoriaMutate } = useConfirmarProntidaoVistoria();
+  const { mutate: confirmarCorrecoesVistoriaMutate } = useConfirmarCorrecoesVistoria();
+  const { mutateAsync: enviarCertificadoDigitalMutate } = useEnviarCertificadoDigital();
+  const { mutateAsync: enviarComprovanteMutate } = useEnviarComprovantePagamento();
   const { mutate: marcarLidos } = useMarcarComentariosLidos('abertura');
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
@@ -3756,7 +4478,6 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
 
   // ── State B: processo existe — exibe status ───────────────────────────────
   const docCliente = abertura.documentos.filter((d) => d.responsavel === 'CLIENTE');
-  const docAdmin = abertura.documentos.filter((d) => d.responsavel === 'ADMIN');
   const comentariosVisiveis = abertura.comentarios.filter(
     (c) => c.visivelCliente
       && !c.texto.startsWith('Método de assinatura confirmado:')
@@ -3812,13 +4533,16 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
             estrutura={estrutura}
             estruturaLoading={estruturaLoading}
             docCliente={docCliente}
-            docAdmin={docAdmin}
             onEnviarDoc={(docId, url) => enviarDoc({ aberturaId: abertura.id, docId, urlArquivo: url })}
             minutas={minutasData}
             onAprovarMinuta={() => { aprovarMinutaMutate(abertura.id); toast.success('Minuta aprovada!') }}
             onSolicitarAlteracaoMinuta={obs => { solicitarAlteracaoMutate({ aberturaId: abertura.id, observacoes: obs }); toast.success('Solicitação enviada ao escritório') }}
             onConfirmarGovbr={opcao => { confirmarGovbrMutate({ aberturaId: abertura.id, opcao }); toast.success('Confirmação enviada!') }}
             onConfirmarAssinaturaCliente={() => { confirmarAssinaturaMutate(abertura.id); toast.success('Assinatura confirmada!') }}
+            onConfirmarProntidaoVistoria={() => { confirmarProntidaoVistoriaMutate(abertura.id); toast.success('Prontidão confirmada!') }}
+            onConfirmarCorrecoesVistoria={() => { confirmarCorrecoesVistoriaMutate(abertura.id); toast.success('Correções confirmadas!') }}
+            onEnviarCertificadoDigital={(file, senha) => enviarCertificadoDigitalMutate({ aberturaId: abertura.id, file, senha })}
+            onEnviarComprovante={(etapaId, url, nome) => enviarComprovanteMutate({ aberturaId: abertura.id, etapaId, url, nome })}
           />
         </CardContent>
       </Card>

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuthStore } from '@/stores/authStore';
+import { uploadFile } from '@/lib/upload';
 import { useLeadDocumentos, useEnviarDocumento } from '@/features/onboarding/queries';
 import type { DocumentoResumo, DocumentoStatus } from '@/features/onboarding/types';
 
@@ -29,7 +29,6 @@ const STATUS_CONFIG: Record<DocumentoStatus, { label: string; className: string 
 };
 
 function DocumentoCard({ doc }: { doc: DocumentoResumo }) {
-  const { user } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const { mutateAsync: enviar } = useEnviarDocumento();
@@ -41,11 +40,9 @@ function DocumentoCard({ doc }: { doc: DocumentoResumo }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const leadId = user?.companyId ?? 'unknown';
-    const urlArquivo = `http://localhost:3000/docs/${leadId}/${doc.tipo}/${encodeURIComponent(file.name)}`;
-
     setUploading(true);
     try {
+      const urlArquivo = await uploadFile(file);
       await enviar({ docId: doc.id, urlArquivo });
       toast.success('Documento enviado com sucesso!');
     } catch {

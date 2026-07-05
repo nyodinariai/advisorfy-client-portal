@@ -18,6 +18,10 @@ import {
   solicitarAlteracaoMinuta,
   confirmarGovbr,
   confirmarAssinaturaCliente,
+  confirmarProntidaoVistoria,
+  confirmarCorrecoesVistoria,
+  enviarCertificadoDigital,
+  enviarComprovantePagamento,
 } from './api';
 import type { AberturaInput, ResponderCorrecaoInput } from './types';
 
@@ -189,6 +193,40 @@ export function useConfirmarGovbr() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
     },
+  });
+}
+
+export function useConfirmarProntidaoVistoria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarProntidaoVistoria(aberturaId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useConfirmarCorrecoesVistoria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarCorrecoesVistoria(aberturaId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useEnviarComprovantePagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, etapaId, url, nome }: { aberturaId: string; etapaId: string; url: string; nome: string }) =>
+      enviarComprovantePagamento(aberturaId, etapaId, url, nome),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useEnviarCertificadoDigital() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, file, senha }: { aberturaId: string; file: File; senha: string }) =>
+      enviarCertificadoDigital(aberturaId, file, senha),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
   });
 }
 

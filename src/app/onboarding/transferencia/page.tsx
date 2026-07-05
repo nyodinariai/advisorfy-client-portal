@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
+import { uploadFile } from '@/lib/upload';
 import {
   useMinhaTransferencia,
   useEnviarDocumentoTransferencia,
@@ -166,9 +167,9 @@ function DocCard({
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const urlArquivo = `/uploads/legalizacao/${doc.id}/${encodeURIComponent(file.name)}`;
     setUploading(true);
     try {
+      const urlArquivo = await uploadFile(file);
       await onEnviar(doc.id, urlArquivo);
       toast.success('Documento enviado com sucesso!');
     } catch {
