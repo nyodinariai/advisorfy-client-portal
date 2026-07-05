@@ -11,6 +11,17 @@ import {
   aprovarRazaoSocial,
   responderCorrecaoAbertura,
   responderPropostaRegime,
+  adicionarComentarioAbertura,
+  validarDossie,
+  fetchMinutas,
+  aprovarMinuta,
+  solicitarAlteracaoMinuta,
+  confirmarGovbr,
+  confirmarAssinaturaCliente,
+  confirmarProntidaoVistoria,
+  confirmarCorrecoesVistoria,
+  enviarCertificadoDigital,
+  enviarComprovantePagamento,
 } from './api';
 import type { AberturaInput, ResponderCorrecaoInput } from './types';
 
@@ -106,6 +117,116 @@ export function useResponderPropostaRegime() {
       qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
       qc.invalidateQueries({ queryKey: queryKeys.aberturaEstrutura(vars.aberturaId) });
     },
+  });
+}
+
+export function useAdicionarComentarioAbertura() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, texto }: { aberturaId: string; texto: string }) =>
+      adicionarComentarioAbertura(aberturaId, texto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useValidarDossie() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      aberturaId,
+      aprovado,
+      motivoRejeicao,
+    }: {
+      aberturaId: string;
+      aprovado: boolean;
+      motivoRejeicao?: string;
+    }) => validarDossie(aberturaId, aprovado, motivoRejeicao),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useMinutas(aberturaId?: string) {
+  return useQuery({
+    queryKey: ['abertura-minutas', aberturaId ?? ''],
+    queryFn: () => fetchMinutas(aberturaId!),
+    enabled: Boolean(aberturaId),
+  });
+}
+
+export function useAprovarMinuta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => aprovarMinuta(aberturaId),
+    onSuccess: (_data, aberturaId) => {
+      qc.invalidateQueries({ queryKey: ['abertura-minutas', aberturaId] });
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
+    },
+  });
+}
+
+export function useSolicitarAlteracaoMinuta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, observacoes }: { aberturaId: string; observacoes: string }) =>
+      solicitarAlteracaoMinuta(aberturaId, observacoes),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['abertura-minutas', vars.aberturaId] });
+    },
+  });
+}
+
+export function useConfirmarAssinaturaCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarAssinaturaCliente(aberturaId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
+    },
+  });
+}
+
+export function useConfirmarGovbr() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, opcao }: { aberturaId: string; opcao: 'GOV_BR' | 'E_CPF' }) =>
+      confirmarGovbr(aberturaId, opcao),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() });
+    },
+  });
+}
+
+export function useConfirmarProntidaoVistoria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarProntidaoVistoria(aberturaId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useConfirmarCorrecoesVistoria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (aberturaId: string) => confirmarCorrecoesVistoria(aberturaId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useEnviarComprovantePagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, etapaId, url, nome }: { aberturaId: string; etapaId: string; url: string; nome: string }) =>
+      enviarComprovantePagamento(aberturaId, etapaId, url, nome),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
+  });
+}
+
+export function useEnviarCertificadoDigital() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ aberturaId, file, senha }: { aberturaId: string; file: File; senha: string }) =>
+      enviarCertificadoDigital(aberturaId, file, senha),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
   });
 }
 

@@ -15,11 +15,12 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
+import { uploadFile } from '@/lib/upload';
 import {
   useMinhaTransferencia,
   useEnviarDocumentoTransferencia,
@@ -166,9 +167,9 @@ function DocCard({
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const urlArquivo = `/uploads/legalizacao/${doc.id}/${encodeURIComponent(file.name)}`;
     setUploading(true);
     try {
+      const urlArquivo = await uploadFile(file);
       await onEnviar(doc.id, urlArquivo);
       toast.success('Documento enviado com sucesso!');
     } catch {
@@ -264,34 +265,38 @@ function DocsSection({
   }, {});
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {Object.entries(grouped).map(([bloco, blocosDocs]) => (
-        <div key={bloco} className="space-y-2">
-          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            {bloco}
-          </p>
-          {adminMode ? (
-            <div className="divide-y rounded-lg border">
-              {blocosDocs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm">{doc.tipoDocumento}</span>
-                  <Badge variant="outline" className={DOC_STATUS_CLASS[doc.status]}>
-                    {DOC_STATUS_LABEL[doc.status]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {blocosDocs.map((doc) => (
-                <DocCard key={doc.id} doc={doc} onEnviar={onEnviar!} />
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </section>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {Object.entries(grouped).map(([bloco, blocosDocs]) => (
+          <div key={bloco} className="space-y-2">
+            <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              {bloco}
+            </p>
+            {adminMode ? (
+              <div className="divide-y rounded-lg border">
+                {blocosDocs.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm">{doc.tipoDocumento}</span>
+                    <Badge variant="outline" className={DOC_STATUS_CLASS[doc.status]}>
+                      {DOC_STATUS_LABEL[doc.status]}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {blocosDocs.map((doc) => (
+                  <DocCard key={doc.id} doc={doc} onEnviar={onEnviar!} />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -388,23 +393,27 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <RefreshCw className="size-5 text-primary" />
-            <h1 className="text-2xl font-semibold tracking-tight">Transferência de contador</h1>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <RefreshCw className="size-5 text-primary" />
+                <h1 className="text-2xl font-semibold tracking-tight">Transferência de contador</h1>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Solicitado em {formatDate(transferencia.criadoEm)}
+                {transferencia.dataInicioNovo && (
+                  <> · Início previsto em {formatDate(transferencia.dataInicioNovo)}</>
+                )}
+              </p>
+            </div>
+            <Badge variant="outline" className={TRANSFERENCIA_STATUS_CLASS[transferencia.status]}>
+              {TRANSFERENCIA_STATUS_CLIENTE[transferencia.status]}
+            </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Solicitado em {formatDate(transferencia.criadoEm)}
-            {transferencia.dataInicioNovo && (
-              <> · Início previsto em {formatDate(transferencia.dataInicioNovo)}</>
-            )}
-          </p>
-        </div>
-        <Badge variant="outline" className={TRANSFERENCIA_STATUS_CLASS[transferencia.status]}>
-          {TRANSFERENCIA_STATUS_CLIENTE[transferencia.status]}
-        </Badge>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Conclusão */}
       {transferencia.status === 'CONCLUIDA' && (
@@ -421,17 +430,21 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
       )}
 
       {/* Timeline */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Onde estamos</h2>
-        <div className="space-y-2">
-          {transferencia.etapas
-            .slice()
-            .sort((a, b) => a.sequencia - b.sequencia)
-            .map((etapa) => (
-              <EtapaItem key={etapa.id} etapa={etapa} />
-            ))}
-        </div>
-      </section>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Onde estamos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {transferencia.etapas
+              .slice()
+              .sort((a, b) => a.sequencia - b.sequencia)
+              .map((etapa) => (
+                <EtapaItem key={etapa.id} etapa={etapa} />
+              ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Documentos do cliente */}
       {docCliente.length > 0 && (
@@ -452,21 +465,18 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
       )}
 
       {/* Mensagens */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="size-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Mensagens da sua assessoria</h2>
-        </div>
-
-        {comentariosVisiveis.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma mensagem ainda.
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="divide-y pt-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="size-5 text-muted-foreground" />
+            <CardTitle className="text-base">Mensagens da sua assessoria</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {comentariosVisiveis.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>
+          ) : (
+            <div className="divide-y">
               {comentariosVisiveis
                 .slice()
                 .sort((a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime())
@@ -475,10 +485,10 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
                     <Comentario c={c} />
                   </div>
                 ))}
-            </CardContent>
-          </Card>
-        )}
-      </section>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
