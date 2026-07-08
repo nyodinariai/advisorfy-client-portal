@@ -8,6 +8,7 @@ import type {
   ResponderCorrecaoInput,
   MinutaContratoSocial,
   CertificadoDigital,
+  TransferenciaFaturamentoResponse,
 } from './types';
 
 export async function fetchMinhaAbertura(): Promise<AberturaResponse | null> {
@@ -64,6 +65,56 @@ export async function enviarDocumentoTransferencia(
   return data;
 }
 
+// ── Troca de contador externa (lead ainda sem tenant provisionado) ─────────────
+
+export async function fetchMinhaTrocaContador(): Promise<TransferenciaResponse | null> {
+  try {
+    const { data } = await api.get<TransferenciaResponse>('/api/legalizacao/troca-contador/minha');
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
+}
+
+export async function enviarDocumentoTrocaContador(
+  transferenciaId: string,
+  docId: string,
+  urlArquivo: string
+): Promise<DocumentoResumo> {
+  const { data } = await api.patch<DocumentoResumo>(
+    `/api/client/legalizacao/troca-contador/${transferenciaId}/documentos/${docId}/enviar`,
+    { urlArquivo }
+  );
+  return data;
+}
+
+export async function fetchMinhaFaturamentoVerificado(): Promise<TransferenciaFaturamentoResponse | null> {
+  try {
+    const { data } = await api.get<TransferenciaFaturamentoResponse>(
+      '/api/legalizacao/troca-contador/faturamento/minha'
+    );
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
+}
+
+export async function responderFaturamentoVerificado(
+  faturamentoId: string,
+  aprovado: boolean,
+  motivoRejeicao?: string
+): Promise<TransferenciaFaturamentoResponse> {
+  const { data } = await api.post<TransferenciaFaturamentoResponse>(
+    `/api/client/legalizacao/troca-contador/faturamento/${faturamentoId}/responder`,
+    { aprovado, motivoRejeicao }
+  );
+  return data;
+}
+
 export async function criarAbertura(input: AberturaInput): Promise<AberturaResponse> {
   const { data } = await api.post<AberturaResponse>('/api/client/legalizacao/abertura', input);
   return data;
@@ -105,7 +156,7 @@ export async function responderPropostaRegime(
 }
 
 export async function marcarComentariosLidos(
-  processoTipo: 'abertura' | 'transferencia',
+  processoTipo: 'abertura' | 'transferencia' | 'troca-contador',
   processoId: string
 ): Promise<void> {
   await api.post(`/api/client/legalizacao/${processoTipo}/${processoId}/comentarios/lidos`);

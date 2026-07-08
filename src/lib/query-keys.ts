@@ -16,4 +16,6 @@ export const queryKeys = {
   minhaAbertura: () => ['minha-abertura'] as const,
   aberturaEstrutura: (aberturaId: string) => ['abertura-estrutura', aberturaId] as const,
   minhaTransferencia: () => ['minha-transferencia'] as const,
+  minhaTrocaContador: () => ['minha-troca-contador'] as const,
+  minhaFaturamentoVerificado: () => ['minha-faturamento-verificado'] as const,
 };

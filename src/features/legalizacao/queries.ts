@@ -4,8 +4,12 @@ import {
   fetchMinhaAbertura,
   fetchAberturaEstrutura,
   fetchMinhaTransferencia,
+  fetchMinhaTrocaContador,
+  fetchMinhaFaturamentoVerificado,
   enviarDocumentoAbertura,
   enviarDocumentoTransferencia,
+  enviarDocumentoTrocaContador,
+  responderFaturamentoVerificado,
   marcarComentariosLidos,
   criarAbertura,
   aprovarRazaoSocial,
@@ -47,6 +51,36 @@ export function useMinhaTransferencia() {
   });
 }
 
+export function useMinhaTrocaContador() {
+  return useQuery({
+    queryKey: queryKeys.minhaTrocaContador(),
+    queryFn: fetchMinhaTrocaContador,
+  });
+}
+
+export function useMinhaFaturamentoVerificado() {
+  return useQuery({
+    queryKey: queryKeys.minhaFaturamentoVerificado(),
+    queryFn: fetchMinhaFaturamentoVerificado,
+  });
+}
+
+export function useResponderFaturamentoVerificado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      faturamentoId,
+      aprovado,
+      motivoRejeicao,
+    }: {
+      faturamentoId: string;
+      aprovado: boolean;
+      motivoRejeicao?: string;
+    }) => responderFaturamentoVerificado(faturamentoId, aprovado, motivoRejeicao),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaFaturamentoVerificado() }),
+  });
+}
+
 export function useEnviarDocumentoAbertura() {
   const qc = useQueryClient();
   return useMutation({
@@ -62,6 +96,22 @@ export function useEnviarDocumentoTransferencia() {
     mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
       enviarDocumentoTransferencia(docId, urlArquivo),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaTransferencia() }),
+  });
+}
+
+export function useEnviarDocumentoTrocaContador() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      transferenciaId,
+      docId,
+      urlArquivo,
+    }: {
+      transferenciaId: string;
+      docId: string;
+      urlArquivo: string;
+    }) => enviarDocumentoTrocaContador(transferenciaId, docId, urlArquivo),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaTrocaContador() }),
   });
 }
 
@@ -231,7 +281,7 @@ export function useEnviarCertificadoDigital() {
 }
 
 export function useMarcarComentariosLidos(
-  processoTipo: 'abertura' | 'transferencia'
+  processoTipo: 'abertura' | 'transferencia' | 'troca-contador'
 ) {
   const qc = useQueryClient();
   return useMutation({
@@ -240,7 +290,9 @@ export function useMarcarComentariosLidos(
       const key =
         processoTipo === 'abertura'
           ? queryKeys.minhaAbertura()
-          : queryKeys.minhaTransferencia();
+          : processoTipo === 'troca-contador'
+            ? queryKeys.minhaTrocaContador()
+            : queryKeys.minhaTransferencia();
       qc.invalidateQueries({ queryKey: key });
     },
   });
