@@ -19,7 +19,7 @@ import { uploadFile } from '@/lib/upload';
 import { useAuth } from '@/hooks/useAuth';
 import { leadPortalService } from '@/services/leadPortal';
 import type { DocumentoResumo, TipoDocumento } from '@/types/leadPortal';
-import { useMinhaAbertura, useMinhaTransferencia } from '@/features/legalizacao/queries';
+import { useMinhaAbertura, useMinhaTrocaContador } from '@/features/legalizacao/queries';
 import { AberturaOnboarding } from './abertura/page';
 import { TransferenciaOnboarding } from './transferencia/page';
 
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
   });
 
   const { data: abertura, isLoading: loadingAbertura } = useMinhaAbertura();
-  const { data: transferencia, isLoading: loadingTransferencia } = useMinhaTransferencia();
+  const { data: transferencia, isLoading: loadingTransferencia } = useMinhaTrocaContador();
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading || loadingAbertura || loadingTransferencia) {

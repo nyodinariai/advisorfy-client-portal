@@ -18,21 +18,36 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { uploadFile } from '@/lib/upload';
 import {
-  useMinhaTransferencia,
-  useEnviarDocumentoTransferencia,
+  useMinhaTrocaContador,
+  useEnviarDocumentoTrocaContador,
   useMarcarComentariosLidos,
+  useMinhaFaturamentoVerificado,
+  useResponderFaturamentoVerificado,
 } from '@/features/legalizacao/queries';
 import {
   TRANSFERENCIA_STATUS_CLIENTE,
   BLOCO_LABEL_CLIENTE,
+  DOCUMENTO_TIPO_LABEL_CLIENTE,
+  TIPO_RECEITA_LABEL,
+  FATURAMENTO_STATUS_CLIENTE,
   type TransferenciaStatus,
   type DocumentoResumo,
   type EtapaResponse,
   type ComentarioResponse,
+  type TipoReceita,
 } from '@/features/legalizacao/types';
 
 // ---------------------------------------------------------------------------
@@ -41,9 +56,7 @@ import {
 
 const TRANSFERENCIA_STATUS_CLASS: Record<TransferenciaStatus, string> = {
   SOLICITADA: 'bg-blue-100 text-blue-700 border-blue-300',
-  AGUARDANDO_DOCUMENTOS: 'bg-orange-100 text-orange-700 border-orange-300',
-  EM_ANALISE: 'bg-purple-100 text-purple-700 border-purple-300',
-  AGUARDANDO_CRC: 'bg-amber-100 text-amber-700 border-amber-300',
+  DOCUMENTOS_RECEBIDOS: 'bg-orange-100 text-orange-700 border-orange-300',
   HOMOLOGADA: 'bg-teal-100 text-teal-700 border-teal-300',
   CONCLUIDA: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   CANCELADA: 'bg-muted text-muted-foreground border-border',
@@ -184,7 +197,9 @@ function DocCard({
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-0.5">
-          <p className="text-sm font-medium leading-snug">{doc.tipoDocumento}</p>
+          <p className="text-sm font-medium leading-snug">
+            {DOCUMENTO_TIPO_LABEL_CLIENTE[doc.tipoDocumento] ?? doc.tipoDocumento}
+          </p>
           {doc.descricao && <p className="text-xs text-muted-foreground">{doc.descricao}</p>}
         </div>
         <Badge variant="outline" className={DOC_STATUS_CLASS[doc.status]}>
@@ -279,7 +294,9 @@ function DocsSection({
               <div className="divide-y rounded-lg border">
                 {blocosDocs.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm">{doc.tipoDocumento}</span>
+                    <span className="text-sm">
+                      {DOCUMENTO_TIPO_LABEL_CLIENTE[doc.tipoDocumento] ?? doc.tipoDocumento}
+                    </span>
                     <Badge variant="outline" className={DOC_STATUS_CLASS[doc.status]}>
                       {DOC_STATUS_LABEL[doc.status]}
                     </Badge>
@@ -320,13 +337,175 @@ function Comentario({ c }: { c: ComentarioResponse }) {
 }
 
 // ---------------------------------------------------------------------------
+// Faturamento verificado
+// ---------------------------------------------------------------------------
+
+const TIPOS_RECEITA: TipoReceita[] = ['PRODUTOS', 'SERVICOS', 'OUTRAS'];
+
+const FATURAMENTO_STATUS_CLASS: Record<string, string> = {
+  ENVIADA: 'bg-amber-100 text-amber-700 border-amber-300',
+  APROVADA: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  REJEITADA: 'bg-red-100 text-red-700 border-red-300',
+  CANCELADA: 'bg-muted text-muted-foreground border-border',
+};
+
+function mesLabel(mesReferencia: string) {
+  const [ano, mes] = mesReferencia.split('-');
+  return new Date(Number(ano), Number(mes) - 1, 1)
+    .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
+    .replace('.', '');
+}
+
+function FaturamentoVerificadoBlock({
+  faturamento,
+}: {
+  faturamento: NonNullable<ReturnType<typeof useMinhaFaturamentoVerificado>['data']>;
+}) {
+  const { mutateAsync: responder, isPending } = useResponderFaturamentoVerificado();
+  const [rejeitarOpen, setRejeitarOpen] = useState(false);
+  const [motivo, setMotivo] = useState('');
+
+  const meses = Array.from(new Set(faturamento.linhas.map((l) => l.mesReferencia))).sort();
+
+  async function handleAprovar() {
+    try {
+      await responder({ faturamentoId: faturamento.id, aprovado: true });
+      toast.success('Faturamento aprovado!');
+    } catch {
+      toast.error('Erro ao aprovar. Tente novamente.');
+    }
+  }
+
+  async function handleRejeitar() {
+    if (!motivo.trim()) return;
+    try {
+      await responder({ faturamentoId: faturamento.id, aprovado: false, motivoRejeicao: motivo });
+      toast.success('Faturamento rejeitado. Nossa equipe irá revisar.');
+      setRejeitarOpen(false);
+      setMotivo('');
+    } catch {
+      toast.error('Erro ao rejeitar. Tente novamente.');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">Faturamento verificado</CardTitle>
+          <Badge variant="outline" className={FATURAMENTO_STATUS_CLASS[faturamento.status]}>
+            {FATURAMENTO_STATUS_CLIENTE[faturamento.status]}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Com base nos documentos fiscais que você enviou, nossa equipe calculou o faturamento
+          abaixo. Confira e aprove — ele será usado para definir o plano da sua empresa.
+        </p>
+
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tipo de receita</TableHead>
+                {meses.map((mes) => (
+                  <TableHead key={mes} className="text-right">{mesLabel(mes)}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {TIPOS_RECEITA.map((tipo) => (
+                <TableRow key={tipo}>
+                  <TableCell className="font-medium">{TIPO_RECEITA_LABEL[tipo]}</TableCell>
+                  {meses.map((mes) => {
+                    const linha = faturamento.linhas.find(
+                      (l) => l.mesReferencia === mes && l.tipoReceita === tipo
+                    );
+                    return (
+                      <TableCell key={mes} className="text-right tabular-nums">
+                        {formatCurrency(linha?.valor ?? 0)}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">Média mensal</p>
+            <p className="text-lg font-semibold tabular-nums">{formatCurrency(faturamento.faturamentoMedioMensal)}</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">Faturamento anualizado</p>
+            <p className="text-lg font-semibold tabular-nums">{formatCurrency(faturamento.faturamentoAnualizado)}</p>
+          </div>
+        </div>
+
+        {faturamento.justificativa && (
+          <p className="text-sm text-muted-foreground">{faturamento.justificativa}</p>
+        )}
+
+        {faturamento.status === 'REJEITADA' && faturamento.observacoesCliente && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{faturamento.observacoesCliente}</AlertDescription>
+          </Alert>
+        )}
+
+        {faturamento.status === 'ENVIADA' && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button onClick={handleAprovar} disabled={isPending} className="gap-2">
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+              Aprovar faturamento
+            </Button>
+            <Button variant="outline" onClick={() => setRejeitarOpen(true)} disabled={isPending}>
+              Rejeitar
+            </Button>
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={rejeitarOpen} onOpenChange={setRejeitarOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar faturamento verificado</DialogTitle>
+            <DialogDescription>
+              Explique o que está incorreto para que nossa equipe possa revisar.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            rows={4}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Ex.: O valor de servicos de fevereiro esta errado."
+            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejeitarOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleRejeitar} disabled={!motivo.trim() || isPending}>
+              {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Confirmar rejeição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export function TransferenciaOnboarding({ embedded = false }: { embedded?: boolean }) {
-  const { data: transferencia, isLoading, isError } = useMinhaTransferencia();
-  const { mutateAsync: enviarDoc } = useEnviarDocumentoTransferencia();
-  const { mutate: marcarLidos } = useMarcarComentariosLidos('transferencia');
+  const { data: transferencia, isLoading, isError } = useMinhaTrocaContador();
+  const { mutateAsync: enviarDoc } = useEnviarDocumentoTrocaContador();
+  const { mutate: marcarLidos } = useMarcarComentariosLidos('troca-contador');
+  const { data: faturamento } = useMinhaFaturamentoVerificado();
 
   useEffect(() => {
     if (transferencia?.comentariosNaoLidos && transferencia.comentariosNaoLidos > 0) {
@@ -446,12 +625,15 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
         </CardContent>
       </Card>
 
+      {/* Faturamento verificado */}
+      {faturamento && <FaturamentoVerificadoBlock faturamento={faturamento} />}
+
       {/* Documentos do cliente */}
       {docCliente.length > 0 && (
         <DocsSection
           title="Documentos necessários"
           docs={docCliente}
-          onEnviar={(docId, url) => enviarDoc({ docId, urlArquivo: url })}
+          onEnviar={(docId, url) => enviarDoc({ transferenciaId: transferencia.id, docId, urlArquivo: url })}
         />
       )}
 

@@ -49,9 +49,7 @@ export type FormularioStatus =
 
 export type TransferenciaStatus =
   | 'SOLICITADA'
-  | 'AGUARDANDO_DOCUMENTOS'
-  | 'EM_ANALISE'
-  | 'AGUARDANDO_CRC'
+  | 'DOCUMENTOS_RECEBIDOS'
   | 'HOMOLOGADA'
   | 'CONCLUIDA'
   | 'CANCELADA';
@@ -179,6 +177,45 @@ export interface TransferenciaResponse {
   atualizadoEm: string;
 }
 
+// ── Faturamento verificado (troca de contador externa) ─────────────────────────
+
+export type TipoReceita = 'PRODUTOS' | 'SERVICOS' | 'OUTRAS';
+
+export type FaturamentoVerificadoStatus = 'ENVIADA' | 'APROVADA' | 'REJEITADA' | 'CANCELADA';
+
+export interface FaturamentoMensalLinha {
+  mesReferencia: string;
+  tipoReceita: TipoReceita;
+  valor: number;
+}
+
+export interface TransferenciaFaturamentoResponse {
+  id: string;
+  transferenciaId: string;
+  status: FaturamentoVerificadoStatus;
+  faturamentoMedioMensal: number;
+  faturamentoAnualizado: number;
+  justificativa: string | null;
+  observacoesCliente: string | null;
+  linhas: FaturamentoMensalLinha[];
+  documentosEvidenciaIds: string[];
+  enviadaEm: string | null;
+  respondidaEm: string | null;
+}
+
+export const TIPO_RECEITA_LABEL: Record<TipoReceita, string> = {
+  PRODUTOS: 'Produtos',
+  SERVICOS: 'Servicos',
+  OUTRAS: 'Outras',
+};
+
+export const FATURAMENTO_STATUS_CLIENTE: Record<FaturamentoVerificadoStatus, string> = {
+  ENVIADA: 'Aguardando sua aprovacao',
+  APROVADA: 'Aprovado',
+  REJEITADA: 'Rejeitado',
+  CANCELADA: 'Cancelado',
+};
+
 export const ABERTURA_STATUS_CLIENTE: Record<AberturaStatus, string> = {
   SOLICITADA: 'Solicitacao recebida',
   EM_ANDAMENTO: 'Em andamento',
@@ -199,10 +236,8 @@ export const FORMULARIO_STATUS_CLIENTE: Record<FormularioStatus, string> = {
 
 export const TRANSFERENCIA_STATUS_CLIENTE: Record<TransferenciaStatus, string> = {
   SOLICITADA: 'Solicitacao recebida',
-  AGUARDANDO_DOCUMENTOS: 'Aguardando seus documentos',
-  EM_ANALISE: 'Em analise pela nossa equipe',
-  AGUARDANDO_CRC: 'Aguardando registro no CRC',
-  HOMOLOGADA: 'Transferencia aprovada pelo CRC',
+  DOCUMENTOS_RECEBIDOS: 'Aguardando analise da nossa equipe',
+  HOMOLOGADA: 'Transferencia homologada',
   CONCLUIDA: 'Transferencia concluida',
   CANCELADA: 'Processo cancelado',
 };
@@ -446,6 +481,31 @@ export const BLOCO_LABEL_CLIENTE: Record<string, string> = {
   PROFISSIONAL: 'Dados profissionais',
   FISCAL: 'Dados fiscais',
   LICENCIAMENTO: 'Licenciamento',
+};
+
+export const DOCUMENTO_TIPO_LABEL_CLIENTE: Record<string, string> = {
+  PROCURACAO_ECAC: 'Procuracao Eletronica e-CAC',
+  DISTRATO_CONTADOR_ANTERIOR: 'Distrato com Contador Anterior',
+  DAS_ULTIMOS_12_MESES: 'DAS dos Ultimos 12 Meses',
+  DEFIS_DECLARACAO_ANUAL: 'DEFIS — Declaracao Anual',
+  DASN_MEI: 'DASN-MEI',
+  GUIAS_ISS_ICMS: 'Guias de ISS/ICMS',
+  BALANCETE_VERIFICACAO: 'Balancete de Verificacao',
+  DIRF: 'DIRF',
+  INVENTARIO_ESTOQUE: 'Inventario de Estoque',
+  CONTRATO_SOCIAL: 'Contrato Social',
+  CARTAO_CNPJ: 'Cartao CNPJ',
+  INSCRICAO_ESTADUAL: 'Inscricao Estadual',
+  INSCRICAO_MUNICIPAL: 'Inscricao Municipal',
+  CERTIFICADO_DIGITAL: 'Certificado Digital',
+  CERTIDAO_DEBITOS_FEDERAIS: 'Certidao de Debitos Federais',
+  PARCELAMENTOS_ATIVOS: 'Parcelamentos Ativos',
+  EXTRATO_FGTS: 'Extrato FGTS',
+  DISTRATO_SERVICOS_CONTABEIS: 'Distrato de Prestacao de Servicos',
+  TTRT_ELETRONICO: 'TTRT Eletronico',
+  PROTOCOLO_ENTREGA_ACERVO: 'Protocolo de Entrega do Acervo',
+  CONTRATO_PRESTACAO_SERVICOS: 'Contrato de Prestacao de Servicos',
+  OUTRO: 'Outro Documento',
 };
 
 // ── Eventos de etapa ──────────────────────────────────────────────────────────
