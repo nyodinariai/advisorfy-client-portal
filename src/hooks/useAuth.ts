@@ -6,6 +6,14 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import type { LoginResponse, MeResponse, SelectTenantResponse } from '@/types/auth';
 
+export async function acceptInvitation(
+  token: string,
+  password: string,
+  phoneNumber?: string,
+): Promise<void> {
+  await api.post('/api/erp/users/accept-invitation', { token, password, phoneNumber });
+}
+
 export function useAuth() {
   const { user, token, setSession, clearSession } = useAuthStore();
   const router = useRouter();
@@ -29,6 +37,9 @@ export function useAuth() {
       {
         userId: me.userId,
         tenantId: me.tenantId,
+        // No portal do cliente o tenant é a própria empresa (COMPANY) — não existe
+        // um companyId separado no JWT/MeResponse.
+        companyId: me.tenantId,
         email: me.email,
         name: me.name,
         role: me.role,

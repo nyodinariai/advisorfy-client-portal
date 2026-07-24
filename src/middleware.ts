@@ -2,12 +2,19 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { decodeJwt, isJwtValid } from '@/lib/jwt';
 
 const AUTH_PATHS = ['/login'];
+// Rotas públicas que não exigem sessão e não redirecionam usuário já logado —
+// diferente de AUTH_PATHS (/login), que empurra pra fora quem já está autenticado.
+const PUBLIC_PATHS = ['/convite'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always allow API routes and static assets
   if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 

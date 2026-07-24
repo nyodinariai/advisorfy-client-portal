@@ -95,13 +95,14 @@ export default function InicioDashboard() {
   const companyId = user?.companyId ?? '';
 
   const { data: dasList, isLoading: dasLoading } = useDas(companyId);
-  const { data: holerites, isLoading: holeriteLoading } = useHolerites(companyId);
   const { data: deadlines } = useActivityDeadlines();
   const { data: stagingHistory } = useNfeStagingHistory(companyId);
 
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
+
+  const { data: holerites, isLoading: holeriteLoading } = useHolerites(companyId, currentYear, currentMonth + 1);
 
   const dasAbertasOuVencidas = useMemo(
     () => dasList?.filter((d) => d.status !== 'PAGA') ?? [],
@@ -130,14 +131,7 @@ export default function InicioDashboard() {
     [stagingHistory, currentMonth, currentYear]
   );
 
-  const holeritesThisMonth = useMemo(
-    () =>
-      holerites?.filter((h) => {
-        const [year, month] = h.competencia.split('-').map(Number);
-        return month - 1 === currentMonth && year === currentYear;
-      }).length ?? 0,
-    [holerites, currentMonth, currentYear]
-  );
+  const holeritesThisMonth = holerites?.length ?? 0;
 
   const proximoDeadline = useMemo(() => {
     if (!deadlines) return null;
@@ -165,7 +159,7 @@ export default function InicioDashboard() {
           Olá, {user?.name?.split(' ')[0]} 👋
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Aqui está o resumo de {user?.companyName}.
+          Aqui está o resumo da sua empresa.
         </p>
       </div>
 

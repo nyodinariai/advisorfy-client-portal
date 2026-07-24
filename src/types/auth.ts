@@ -49,7 +49,6 @@ export interface JwtPayload {
   email: string;
   role: UserRole;
   permissions: string[];
-  company_id: string;
   token_type: string;
   exp: number;
   iat: number;
@@ -58,6 +57,7 @@ export interface JwtPayload {
 export interface AuthUser {
   userId: string;
   tenantId: string;
+  companyId: string;
   email: string;
   name: string;
   role: UserRole;

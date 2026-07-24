@@ -1,20 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { Download, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Download, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -23,49 +14,20 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog';
 import { useAuthStore } from '@/stores/authStore';
-import { useFuncionarios, useHolerites } from '@/features/payroll/queries';
-import { submitEventoFolha } from '@/features/payroll/api';
-import { queryKeys } from '@/lib/query-keys';
+import {
+  useExcluirRascunho, useFuncionarios, useHolerites, useMinhasSolicitacoes,
+} from '@/features/payroll/queries';
+import { AdmitirFuncionarioDialog } from '@/features/payroll/AdmitirFuncionarioDialog';
+import { RescisaoDialog } from '@/features/payroll/RescisaoDialog';
 import { formatCurrency, formatDate } from '@/lib/format';
-import type { Holerite } from '@/features/payroll/types';
+import type { Funcionario, Holerite, StatusAdmissao } from '@/features/payroll/types';
 
-// ---------------------------------------------------------------------------
-// Event form schema
-// ---------------------------------------------------------------------------
-
-const eventoSchema = z.object({
-  tipo: z.enum(['ADMISSAO', 'DEMISSAO', 'FALTA', 'AFASTAMENTO']),
-  funcionarioNome: z.string().min(1, 'Nome obrigatório'),
-  cpf: z.string().optional(),
-  cargo: z.string().optional(),
-  dataEvento: z.string().min(1, 'Data obrigatória'),
-  salario: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
-  motivo: z.string().optional(),
-  dias: z.string().optional().transform((v) => (v ? parseInt(v, 10) : undefined)),
-});
-
-type EventoFormInput = {
-  tipo: 'ADMISSAO' | 'DEMISSAO' | 'FALTA' | 'AFASTAMENTO';
-  funcionarioNome: string;
-  cpf?: string;
-  cargo?: string;
-  dataEvento: string;
-  salario?: string;
-  motivo?: string;
-  dias?: string;
-};
-
-type EventoForm = EventoFormInput;
-
-const EVENTO_LABELS: Record<string, string> = {
-  ADMISSAO: 'Admissão',
-  DEMISSAO: 'Demissão',
-  FALTA: 'Falta',
-  AFASTAMENTO: 'Afastamento',
+const STATUS_ADMISSAO_CONFIG: Record<StatusAdmissao, { label: string; className: string }> = {
+  RASCUNHO: { label: 'Rascunho', className: 'bg-muted text-muted-foreground' },
+  SOLICITADO: { label: 'Aguardando contador', className: 'bg-amber-100 text-amber-700' },
+  APROVADO: { label: 'Aprovado', className: 'bg-blue-100 text-blue-700' },
+  ATIVO: { label: 'Ativo', className: 'bg-green-100 text-green-700' },
 };
 
 // ---------------------------------------------------------------------------
@@ -73,14 +35,19 @@ const EVENTO_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 function HoleriteSheet({ holerite, onClose }: { holerite: Holerite | null; onClose: () => void }) {
+  const vencimentos = holerite?.linhas.filter((l) => l.natureza === 'PROVENTO') ?? [];
+  const descontos = holerite?.linhas.filter((l) => l.natureza === 'DESCONTO') ?? [];
+
   return (
     <Sheet open={!!holerite} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-lg">
         {holerite && (
           <>
             <SheetHeader>
-              <SheetTitle>{holerite.funcionarioNome}</SheetTitle>
-              <SheetDescription>Holerite — {holerite.competencia}</SheetDescription>
+              <SheetTitle>Holerite</SheetTitle>
+              <SheetDescription>
+                Competência {String(holerite.competenciaMes).padStart(2, '0')}/{holerite.competenciaAno}
+              </SheetDescription>
             </SheetHeader>
 
             <div className="mt-6 space-y-4">
@@ -89,8 +56,8 @@ function HoleriteSheet({ holerite, onClose }: { holerite: Holerite | null; onClo
                   <span>Vencimentos</span>
                   <span></span>
                 </div>
-                {holerite.vencimentos.map((v, i) => (
-                  <div key={i} className="flex justify-between px-4 py-2">
+                {vencimentos.map((v) => (
+                  <div key={v.id} className="flex justify-between px-4 py-2">
                     <span>{v.descricao}</span>
                     <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                       {formatCurrency(v.valor)}
@@ -108,8 +75,8 @@ function HoleriteSheet({ holerite, onClose }: { holerite: Holerite | null; onClo
                   <span>Descontos</span>
                   <span></span>
                 </div>
-                {holerite.descontos.map((d, i) => (
-                  <div key={i} className="flex justify-between px-4 py-2">
+                {descontos.map((d) => (
+                  <div key={d.id} className="flex justify-between px-4 py-2">
                     <span>{d.descricao}</span>
                     <span className="text-red-700 dark:text-red-400 font-medium">
                       -{formatCurrency(d.valor)}
@@ -128,147 +95,11 @@ function HoleriteSheet({ holerite, onClose }: { holerite: Holerite | null; onClo
                 <span className="font-semibold">Salário Líquido</span>
                 <span className="text-xl font-bold">{formatCurrency(holerite.salarioLiquido)}</span>
               </div>
-
-              {holerite.pdfUrl && (
-                <a
-                  href={holerite.pdfUrl}
-                  download
-                  className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  <Download className="size-4" />
-                  Baixar PDF
-                </a>
-              )}
             </div>
           </>
         )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Evento dialog
-// ---------------------------------------------------------------------------
-
-function EventoDialog({
-  open,
-  onClose,
-  companyId,
-}: {
-  open: boolean;
-  onClose: () => void;
-  companyId: string;
-}) {
-  const queryClient = useQueryClient();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<EventoForm>({ resolver: zodResolver(eventoSchema) as never });
-
-  const tipo = watch('tipo');
-
-  async function onSubmit(values: EventoForm) {
-    try {
-      await submitEventoFolha(companyId, {
-        ...values,
-        salario: values.salario ? parseFloat(values.salario) : undefined,
-        dias: values.dias ? parseInt(values.dias, 10) : undefined,
-      });
-      toast.success('Evento registrado com sucesso.');
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees(companyId) });
-      reset();
-      onClose();
-    } catch {
-      toast.error('Erro ao registrar evento. Tente novamente.');
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Registrar Evento de Folha</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="tipo">Tipo de evento</Label>
-            <Select onValueChange={(v) => setValue('tipo', v as EventoForm['tipo'])}>
-              <SelectTrigger id="tipo">
-                <SelectValue placeholder="Selecione o tipo…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ADMISSAO">Admissão</SelectItem>
-                <SelectItem value="DEMISSAO">Demissão</SelectItem>
-                <SelectItem value="FALTA">Falta</SelectItem>
-                <SelectItem value="AFASTAMENTO">Afastamento</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.tipo && <p className="text-sm text-destructive">{errors.tipo.message}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="funcionarioNome">Nome do funcionário</Label>
-            <Input id="funcionarioNome" {...register('funcionarioNome')} />
-            {errors.funcionarioNome && (
-              <p className="text-sm text-destructive">{errors.funcionarioNome.message}</p>
-            )}
-          </div>
-
-          {tipo === 'ADMISSAO' && (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="cpf">CPF</Label>
-                <Input id="cpf" placeholder="000.000.000-00" {...register('cpf')} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cargo">Cargo</Label>
-                <Input id="cargo" {...register('cargo')} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="salario">Salário</Label>
-                <Input id="salario" type="number" step="0.01" {...register('salario')} />
-              </div>
-            </>
-          )}
-
-          {(tipo === 'DEMISSAO' || tipo === 'FALTA' || tipo === 'AFASTAMENTO') && (
-            <div className="space-y-1.5">
-              <Label htmlFor="motivo">Motivo</Label>
-              <Input id="motivo" {...register('motivo')} />
-            </div>
-          )}
-
-          {(tipo === 'FALTA' || tipo === 'AFASTAMENTO') && (
-            <div className="space-y-1.5">
-              <Label htmlFor="dias">Dias</Label>
-              <Input id="dias" type="number" {...register('dias')} />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="dataEvento">Data do evento</Label>
-            <Input id="dataEvento" type="date" {...register('dataEvento')} />
-            {errors.dataEvento && (
-              <p className="text-sm text-destructive">{errors.dataEvento.message}</p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Registrando…' : 'Registrar evento'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -280,42 +111,173 @@ export default function FolhaPage() {
   const user = useAuthStore((s) => s.user);
   const companyId = user?.companyId ?? '';
 
+  const hoje = new Date();
   const [selectedHolerite, setSelectedHolerite] = useState<Holerite | null>(null);
-  const [eventoOpen, setEventoOpen] = useState(false);
+  const [admissaoOpen, setAdmissaoOpen] = useState(false);
+  const [editandoRascunho, setEditandoRascunho] = useState<Funcionario | null>(null);
+  const [demitindo, setDemitindo] = useState<Funcionario | null>(null);
 
   const { data: funcionarios, isLoading: funcLoading } = useFuncionarios(companyId);
-  const { data: holerites, isLoading: holeriteLoading } = useHolerites(companyId);
+  const { data: solicitacoes, isLoading: solicitacoesLoading } = useMinhasSolicitacoes(companyId);
+  const { data: holerites, isLoading: holeriteLoading } = useHolerites(
+    companyId, hoje.getFullYear(), hoje.getMonth() + 1,
+  );
+  const excluirRascunho = useExcluirRascunho(companyId);
+
+  function abrirNovaSolicitacao() {
+    setEditandoRascunho(null);
+    setAdmissaoOpen(true);
+  }
+
+  function continuarSolicitacao(f: Funcionario) {
+    setEditandoRascunho(f);
+    setAdmissaoOpen(true);
+  }
+
+  async function excluir(f: Funcionario) {
+    try {
+      await excluirRascunho.mutateAsync(f.id);
+      toast.success('Rascunho excluído.');
+    } catch {
+      toast.error('Erro ao excluir rascunho.');
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Folha de Pagamento</h1>
 
-      <Tabs defaultValue="eventos">
+      <Tabs defaultValue="funcionarios">
         <TabsList>
-          <TabsTrigger value="eventos">Eventos do Mês</TabsTrigger>
-          <TabsTrigger value="holerites">Holerites</TabsTrigger>
           <TabsTrigger value="funcionarios">Funcionários</TabsTrigger>
+          <TabsTrigger value="solicitacoes">Minhas Solicitações</TabsTrigger>
+          <TabsTrigger value="holerites">Holerites</TabsTrigger>
         </TabsList>
 
-        {/* Eventos */}
-        <TabsContent value="eventos" className="mt-4">
+        {/* Funcionários */}
+        <TabsContent value="funcionarios" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base">Eventos do Mês</CardTitle>
+                <CardTitle className="text-base">Funcionários</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Informe ao contador ocorrências que afetam a folha: admissões, demissões e faltas.
+                  Admissões e desligamentos seguindo os dados do e-Social.
                 </p>
               </div>
-              <Button size="sm" onClick={() => setEventoOpen(true)}>
+              <Button size="sm" onClick={abrirNovaSolicitacao}>
                 <Plus className="mr-1.5 size-4" />
-                Novo evento
+                Nova Solicitação
               </Button>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                Nenhum evento registrado neste mês.
+              {funcLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : !funcionarios || funcionarios.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum funcionário cadastrado.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>CPF</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Admissão</TableHead>
+                      <TableHead className="text-right">Salário</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {funcionarios.map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.nome}</TableCell>
+                        <TableCell className="font-mono text-sm">{f.cpf}</TableCell>
+                        <TableCell className="text-sm">{f.cargo ?? '—'}</TableCell>
+                        <TableCell className="text-sm">{formatDate(f.dataAdmissao)}</TableCell>
+                        <TableCell className="text-right text-sm">
+                          {formatCurrency(f.salarioBase)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={f.ativo ? 'default' : 'outline'} className="text-xs">
+                            {f.ativo ? 'Ativo' : 'Desligado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {f.ativo && (
+                            <Button size="sm" variant="outline" onClick={() => setDemitindo(f)}>
+                              Desligar
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Minhas Solicitações */}
+        <TabsContent value="solicitacoes" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Minhas Solicitações</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Rascunhos e admissões em andamento, aguardando revisão do contador.
               </p>
+            </CardHeader>
+            <CardContent>
+              {solicitacoesLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : !solicitacoes || solicitacoes.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma solicitação em andamento.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>CPF</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {solicitacoes.map((f) => {
+                      const cfg = STATUS_ADMISSAO_CONFIG[f.statusAdmissao];
+                      return (
+                        <TableRow key={f.id}>
+                          <TableCell className="font-medium">{f.nome || '(sem nome)'}</TableCell>
+                          <TableCell className="font-mono text-sm">{f.cpf || '—'}</TableCell>
+                          <TableCell>
+                            <Badge className={cfg.className} variant="outline">{cfg.label}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right space-x-2">
+                            {f.statusAdmissao === 'RASCUNHO' && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => continuarSolicitacao(f)}>
+                                  Continuar
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => excluir(f)}>
+                                  <Trash2 className="size-4 text-destructive" />
+                                </Button>
+                              </>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -330,7 +292,7 @@ export default function FolhaPage() {
                 </div>
               ) : !holerites || holerites.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhum holerite disponível.
+                  Nenhum holerite disponível para o mês atual.
                 </p>
               ) : (
                 <Table>
@@ -344,75 +306,35 @@ export default function FolhaPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {holerites.map((h) => (
-                      <TableRow
-                        key={h.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => setSelectedHolerite(h)}
-                      >
-                        <TableCell className="font-medium">{h.funcionarioNome}</TableCell>
-                        <TableCell className="text-sm">{h.competencia}</TableCell>
-                        <TableCell className="text-right text-sm">
-                          {formatCurrency(h.salarioBruto)}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-semibold">
-                          {formatCurrency(h.salarioLiquido)}
-                        </TableCell>
-                        <TableCell>
-                          {h.pdfUrl && (
-                            <Badge variant="outline" className="text-xs">PDF</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Funcionários */}
-        <TabsContent value="funcionarios" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Funcionários Ativos</CardTitle>
-              <p className="text-sm text-muted-foreground">Somente leitura.</p>
-            </CardHeader>
-            <CardContent>
-              {funcLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : !funcionarios || funcionarios.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhum funcionário ativo.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Cargo</TableHead>
-                      <TableHead>Admissão</TableHead>
-                      <TableHead className="text-right">Salário</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {funcionarios
-                      .filter((f) => f.status === 'ATIVO')
-                      .map((f) => (
-                        <TableRow key={f.id}>
-                          <TableCell className="font-medium">{f.nome}</TableCell>
-                          <TableCell className="font-mono text-sm">{f.cpf}</TableCell>
-                          <TableCell className="text-sm">{f.cargo}</TableCell>
-                          <TableCell className="text-sm">{formatDate(f.dataAdmissao)}</TableCell>
+                    {holerites.map((h) => {
+                      const nomeFuncionario = funcionarios?.find((f) => f.id === h.funcionarioId)?.nome
+                        ?? h.funcionarioId.slice(0, 8);
+                      return (
+                        <TableRow
+                          key={h.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setSelectedHolerite(h)}
+                        >
+                          <TableCell className="font-medium">{nomeFuncionario}</TableCell>
+                          <TableCell className="text-sm">
+                            {String(h.competenciaMes).padStart(2, '0')}/{h.competenciaAno}
+                          </TableCell>
                           <TableCell className="text-right text-sm">
-                            {formatCurrency(f.salario)}
+                            {formatCurrency(h.salarioBruto)}
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-semibold">
+                            {formatCurrency(h.salarioLiquido)}
+                          </TableCell>
+                          <TableCell>
+                            {h.status === 'FECHADO' && (
+                              <Badge variant="outline" className="text-xs">
+                                <Download className="mr-1 size-3" />Fechado
+                              </Badge>
+                            )}
                           </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -422,7 +344,17 @@ export default function FolhaPage() {
       </Tabs>
 
       <HoleriteSheet holerite={selectedHolerite} onClose={() => setSelectedHolerite(null)} />
-      <EventoDialog open={eventoOpen} onClose={() => setEventoOpen(false)} companyId={companyId} />
+      <AdmitirFuncionarioDialog
+        companyId={companyId}
+        open={admissaoOpen}
+        funcionario={editandoRascunho}
+        onClose={() => setAdmissaoOpen(false)}
+      />
+      <RescisaoDialog
+        companyId={companyId}
+        funcionario={demitindo}
+        onClose={() => setDemitindo(null)}
+      />
     </div>
   );
 }
