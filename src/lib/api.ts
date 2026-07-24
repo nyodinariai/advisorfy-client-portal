@@ -71,6 +71,7 @@ api.interceptors.response.use(
         {
           userId: me.userId,
           tenantId: me.tenantId,
+          companyId: me.tenantId,
           email: me.email,
           name: me.name,
           role: me.role,

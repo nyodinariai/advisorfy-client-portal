@@ -29,6 +29,9 @@ export function useAuth() {
       {
         userId: me.userId,
         tenantId: me.tenantId,
+        // No portal do cliente o tenant é a própria empresa (COMPANY) — não existe
+        // um companyId separado no JWT/MeResponse.
+        companyId: me.tenantId,
         email: me.email,
         name: me.name,
         role: me.role,
