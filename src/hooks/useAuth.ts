@@ -6,6 +6,14 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import type { LoginResponse, MeResponse, SelectTenantResponse } from '@/types/auth';
 
+export async function acceptInvitation(
+  token: string,
+  password: string,
+  phoneNumber?: string,
+): Promise<void> {
+  await api.post('/api/erp/users/accept-invitation', { token, password, phoneNumber });
+}
+
 export function useAuth() {
   const { user, token, setSession, clearSession } = useAuthStore();
   const router = useRouter();
