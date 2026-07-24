@@ -7,6 +7,9 @@ export const queryKeys = {
   notasEntrada: (companyId: string, filters?: object) => ['notas-entrada', companyId, filters] as const,
   notasSaida: (companyId: string, filters?: object) => ['notas-saida', companyId, filters] as const,
   employees: (companyId: string) => ['employees', companyId] as const,
+  minhasSolicitacoesFuncionarios: (companyId: string) => ['minhas-solicitacoes-funcionarios', companyId] as const,
+  funcionarioDocumentos: (companyId: string, funcionarioId: string) =>
+    ['funcionario-documentos', companyId, funcionarioId] as const,
   holerites: (companyId: string, filters?: object) => ['holerites', companyId, filters] as const,
   accounts: (companyId: string) => ['accounts', companyId] as const,
   company: (companyId: string) => ['company', companyId] as const,
