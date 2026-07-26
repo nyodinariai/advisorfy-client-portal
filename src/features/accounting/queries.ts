@@ -1,11 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { fetchAccounts, fetchCompany, fetchAssignment } from './api';
+import { fetchAccounts, fetchCompany, fetchAssignment, fetchDreMensal } from './api';
 
 export function useAccounts(companyId: string) {
   return useQuery({
     queryKey: queryKeys.accounts(companyId),
     queryFn: () => fetchAccounts(companyId),
+    enabled: !!companyId,
+  });
+}
+
+export function useDreMensal(companyId: string, meses = 12) {
+  return useQuery({
+    queryKey: queryKeys.dreMensal(companyId, meses),
+    queryFn: () => fetchDreMensal(companyId, meses),
     enabled: !!companyId,
   });
 }
