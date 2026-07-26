@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, FileText, Receipt, Circle } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, FileText, Receipt, Circle,
+  CalendarDays, List as ListIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/stores/authStore';
 import { useActivityDeadlines } from '@/features/calendario/queries';
 import { useDas } from '@/features/fiscal/queries';
@@ -30,6 +34,26 @@ function getDaysInMonth(year: number, month: number) {
 
 function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay();
+}
+
+function daysUntil(date: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+const EVENT_VISUALS: Record<string, { icon: typeof FileText; className: string }> = {
+  das: { icon: Receipt, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+  NF: { icon: FileText, className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
+  FOLHA: { icon: FileText, className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' },
+  OUTRO: { icon: FileText, className: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
+};
+
+function eventVisual(event: CalendarEvent) {
+  const key = event.type === 'das' ? 'das' : (event.category ?? 'OUTRO');
+  return EVENT_VISUALS[key] ?? EVENT_VISUALS.OUTRO;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +83,22 @@ function EventBadge({ event }: { event: CalendarEvent }) {
       <FileText className="size-2.5 shrink-0" />
       <span className="truncate">{event.title}</span>
     </div>
+  );
+}
+
+function DaysBadge({ date }: { date: Date }) {
+  const days = daysUntil(date);
+  const label = days < 0 ? 'Atrasado' : days === 0 ? 'Hoje' : `${days}d`;
+  const className =
+    days < 0
+      ? 'border-red-300 text-red-700 dark:text-red-400'
+      : days <= 3
+      ? 'border-orange-300 text-orange-700 dark:text-orange-400'
+      : '';
+  return (
+    <Badge variant="outline" className={className}>
+      {label}
+    </Badge>
   );
 }
 
@@ -121,6 +161,11 @@ export default function CalendarioPage() {
     return map;
   }, [events]);
 
+  const sortedEvents = useMemo(
+    () => [...events].sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [events]
+  );
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
 
@@ -160,77 +205,156 @@ export default function CalendarioPage() {
           </Button>
         </div>
 
-        <CardContent className="p-0">
-          {/* Day names */}
-          <div className="grid grid-cols-7 border-b text-center">
-            {DAY_NAMES.map((d) => (
-              <div key={d} className="py-2 text-xs font-medium text-muted-foreground">
-                {d}
-              </div>
-            ))}
+        <Tabs defaultValue="calendario">
+          <div className="border-b px-4 pt-3">
+            <TabsList>
+              <TabsTrigger value="calendario">
+                <CalendarDays className="mr-1.5 size-4" />
+                Calendário
+              </TabsTrigger>
+              <TabsTrigger value="lista">
+                <ListIcon className="mr-1.5 size-4" />
+                Lista
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {/* Calendar grid */}
-          {deadlinesLoading ? (
-            <div className="grid grid-cols-7 gap-px p-4">
-              {Array.from({ length: 35 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-7">
-              {cells.map((day, idx) => {
-                const isToday =
-                  day !== null &&
-                  day === today.getDate() &&
-                  month === today.getMonth() &&
-                  year === today.getFullYear();
-                const dayEvents = day ? eventsByDay[day] ?? [] : [];
-
-                return (
-                  <div
-                    key={idx}
-                    className={`min-h-[80px] border-b border-r p-1.5 ${
-                      !day ? 'bg-muted/30' : ''
-                    }`}
-                  >
-                    {day && (
-                      <>
-                        <span
-                          className={`mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium ${
-                            isToday
-                              ? 'bg-primary text-primary-foreground'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {day}
-                        </span>
-                        <div className="space-y-0.5">
-                          {dayEvents.slice(0, 2).map((ev) => (
-                            <button
-                              key={ev.id}
-                              type="button"
-                              className="w-full text-left"
-                              onClick={() => setSelectedEvent(ev)}
-                            >
-                              <EventBadge event={ev} />
-                            </button>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="flex items-center gap-0.5 px-1 text-[10px] text-muted-foreground">
-                              <Circle className="size-1.5 fill-current" />
-                              +{dayEvents.length - 2}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
+          {/* Calendário */}
+          <TabsContent value="calendario" className="mt-0">
+            <CardContent className="p-0">
+              {/* Day names */}
+              <div className="grid grid-cols-7 border-b text-center">
+                {DAY_NAMES.map((d) => (
+                  <div key={d} className="py-2 text-xs font-medium text-muted-foreground">
+                    {d}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
+                ))}
+              </div>
+
+              {/* Calendar grid */}
+              {deadlinesLoading ? (
+                <div className="grid grid-cols-7 gap-px p-4">
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 rounded" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-7">
+                  {cells.map((day, idx) => {
+                    const isToday =
+                      day !== null &&
+                      day === today.getDate() &&
+                      month === today.getMonth() &&
+                      year === today.getFullYear();
+                    const dayEvents = day ? eventsByDay[day] ?? [] : [];
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`min-h-[80px] border-b border-r p-1.5 ${
+                          !day ? 'bg-muted/30' : ''
+                        }`}
+                      >
+                        {day && (
+                          <>
+                            <span
+                              className={`mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium ${
+                                isToday
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'text-foreground'
+                              }`}
+                            >
+                              {day}
+                            </span>
+                            <div className="space-y-0.5">
+                              {dayEvents.slice(0, 2).map((ev) => (
+                                <button
+                                  key={ev.id}
+                                  type="button"
+                                  className="w-full text-left"
+                                  onClick={() => setSelectedEvent(ev)}
+                                >
+                                  <EventBadge event={ev} />
+                                </button>
+                              ))}
+                              {dayEvents.length > 2 && (
+                                <div className="flex items-center gap-0.5 px-1 text-[10px] text-muted-foreground">
+                                  <Circle className="size-1.5 fill-current" />
+                                  +{dayEvents.length - 2}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </TabsContent>
+
+          {/* Lista */}
+          <TabsContent value="lista" className="mt-0">
+            <CardContent>
+              {deadlinesLoading ? (
+                <div className="divide-y">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="size-9 rounded-lg" />
+                        <div className="space-y-1.5">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : sortedEvents.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum evento neste mês.
+                </p>
+              ) : (
+                <div className="divide-y">
+                  {sortedEvents.map((ev) => {
+                    const visual = eventVisual(ev);
+                    const Icon = visual.icon;
+                    return (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-muted/50 transition-colors"
+                        onClick={() => setSelectedEvent(ev)}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${visual.className}`}
+                          >
+                            <Icon className="size-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{ev.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {DAY_NAMES[ev.date.getDay()]}, dia {ev.date.getDate()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {ev.valor != null && (
+                            <span className="text-sm font-semibold">{formatCurrency(ev.valor)}</span>
+                          )}
+                          <DaysBadge date={ev.date} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </TabsContent>
+        </Tabs>
       </Card>
 
       {/* Event detail drawer */}
