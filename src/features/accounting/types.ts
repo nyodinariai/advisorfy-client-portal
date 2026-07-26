@@ -17,6 +17,14 @@ export interface ClientAssignment {
   email: string;
 }
 
+export interface DreMensal {
+  competencia: string;
+  receita: number;
+  custos: number;
+  despesas: number;
+  lucro: number;
+}
+
 export interface Company {
   id: string;
   razaoSocial: string;
