@@ -14,12 +14,16 @@ export interface LatestDocument {
   sentAt: string;
 }
 
+export type Periodicidade = 'MENSAL' | 'ANUAL' | 'UNICO';
+
 export interface DocumentTypeSummary {
   typeId: string;
   typeName: string;
   isDefault: boolean;
   grupo: string | null;
   templateDisponivel: boolean;
+  periodicidade: Periodicidade;
+  /** MENSAL/ANUAL: documento da competência pedida. UNICO: o mais recente enviado. */
   latestDocument: LatestDocument | null;
 }
 

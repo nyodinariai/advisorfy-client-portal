@@ -197,17 +197,24 @@ function UploadResult({ files }: { files: StagingFile[] }) {
 // ---------------------------------------------------------------------------
 
 function DocumentoRow({
-  tipo, companyId, onOpenHistorico,
+  tipo, companyId, ano, mes, onOpenHistorico,
 }: {
-  tipo: DocumentTypeSummary; companyId: string; onOpenHistorico: (tipo: DocumentTypeSummary) => void;
+  tipo: DocumentTypeSummary; companyId: string; ano: number; mes: number;
+  onOpenHistorico: (tipo: DocumentTypeSummary) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadDocumento(companyId);
+  const cobraCompetencia = tipo.periodicidade !== 'UNICO';
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
     try {
-      await upload.mutateAsync({ typeId: tipo.typeId, file });
+      await upload.mutateAsync({
+        typeId: tipo.typeId,
+        file,
+        referenciaAno: cobraCompetencia ? ano : undefined,
+        referenciaMes: cobraCompetencia ? mes : undefined,
+      });
       toast.success('Documento enviado.');
     } catch {
       toast.error('Erro ao enviar documento. Tente novamente.');
@@ -239,6 +246,10 @@ function DocumentoRow({
         {latest ? (
           <p className="text-xs text-muted-foreground truncate">
             {latest.fileName} · enviado {formatDate(latest.sentAt)}
+          </p>
+        ) : cobraCompetencia ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum arquivo para {String(mes).padStart(2, '0')}/{ano}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">Nenhum arquivo enviado</p>
@@ -382,7 +393,7 @@ export default function DocumentosPage() {
   const { data: stagingHistory, isLoading: historyLoading } = useNfeStagingHistory(companyId);
   const { data: notasEntrada, isLoading: entradaLoading } = useNotasEntrada(companyId, ano, mes);
   const { data: notasSaida, isLoading: saidaLoading } = useNotasSaida(companyId, ano, mes);
-  const { data: resumo, isLoading: resumoLoading } = useDocumentosResumo(companyId);
+  const { data: resumo, isLoading: resumoLoading } = useDocumentosResumo(companyId, ano, mes);
 
   const gruposOrdenados = useMemo(() => {
     if (!resumo) return [];
@@ -604,11 +615,31 @@ export default function DocumentosPage() {
         {/* Documentos Contábeis */}
         <TabsContent value="contabeis" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Checklist de documentos</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Envie os documentos abaixo conforme a movimentação da empresa.
-              </p>
+            <CardHeader className="flex flex-row items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Checklist de documentos</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Documentos recorrentes (extratos, aging list…) valem para a competência selecionada.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Select value={String(mes)} onValueChange={(v) => v && setMes(Number(v))}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MESES.map((m, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={String(ano)} onValueChange={(v) => v && setAno(Number(v))}>
+                  <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 4 }, (_, i) => hoje.getFullYear() - 2 + i).map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
               {resumoLoading ? (
@@ -631,6 +662,8 @@ export default function DocumentosPage() {
                           key={tipo.typeId}
                           tipo={tipo}
                           companyId={companyId}
+                          ano={ano}
+                          mes={mes}
                           onOpenHistorico={setHistoricoTipo}
                         />
                       ))}

@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchHistoricoPorTipo, fetchResumo, uploadDocumento } from './api';
 
-export function useDocumentosResumo(companyId: string) {
+export function useDocumentosResumo(companyId: string, ano?: number, mes?: number) {
   return useQuery({
-    queryKey: queryKeys.documentosResumo(companyId),
-    queryFn: () => fetchResumo(companyId),
+    queryKey: queryKeys.documentosResumo(companyId, { ano, mes }),
+    queryFn: () => fetchResumo(companyId, ano, mes),
     enabled: !!companyId,
   });
 }
@@ -13,10 +13,12 @@ export function useDocumentosResumo(companyId: string) {
 export function useUploadDocumento(companyId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ typeId, file }: { typeId: string; file: File }) =>
-      uploadDocumento(companyId, typeId, file),
+    mutationFn: ({
+      typeId, file, referenciaAno, referenciaMes,
+    }: { typeId: string; file: File; referenciaAno?: number; referenciaMes?: number }) =>
+      uploadDocumento(companyId, typeId, file, referenciaAno, referenciaMes),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documentosResumo(companyId) });
+      queryClient.invalidateQueries({ queryKey: ['documentos-resumo', companyId] });
     },
   });
 }

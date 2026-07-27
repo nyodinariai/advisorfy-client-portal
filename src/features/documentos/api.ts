@@ -1,9 +1,14 @@
 import api from '@/lib/api';
 import type { CompanyDocumentSummaryResponse, DocumentResponse } from './types';
 
-export async function fetchResumo(companyId: string): Promise<CompanyDocumentSummaryResponse> {
+export async function fetchResumo(
+  companyId: string,
+  ano?: number,
+  mes?: number
+): Promise<CompanyDocumentSummaryResponse> {
   const { data } = await api.get<CompanyDocumentSummaryResponse>(
-    `/api/portal/empresas/${companyId}/documentos`
+    `/api/portal/empresas/${companyId}/documentos`,
+    { params: { ano, mes } }
   );
   return data;
 }
@@ -11,10 +16,14 @@ export async function fetchResumo(companyId: string): Promise<CompanyDocumentSum
 export async function uploadDocumento(
   companyId: string,
   typeId: string,
-  file: File
+  file: File,
+  referenciaAno?: number,
+  referenciaMes?: number
 ): Promise<DocumentResponse> {
   const form = new FormData();
   form.append('file', file);
+  if (referenciaAno != null) form.append('referenciaAno', String(referenciaAno));
+  if (referenciaMes != null) form.append('referenciaMes', String(referenciaMes));
   const { data } = await api.post<DocumentResponse>(
     `/api/portal/empresas/${companyId}/documentos/tipo/${typeId}/upload`,
     form,
