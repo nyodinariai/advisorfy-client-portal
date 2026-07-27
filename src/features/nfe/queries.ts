@@ -10,18 +10,18 @@ export function useNfeStagingHistory(companyId: string) {
   });
 }
 
-export function useNotasEntrada(companyId: string) {
+export function useNotasEntrada(companyId: string, ano?: number, mes?: number) {
   return useQuery({
-    queryKey: queryKeys.notasEntrada(companyId),
-    queryFn: () => fetchNotasEntrada(companyId),
+    queryKey: queryKeys.notasEntrada(companyId, { ano, mes }),
+    queryFn: () => fetchNotasEntrada(companyId, ano, mes),
     enabled: !!companyId,
   });
 }
 
-export function useNotasSaida(companyId: string) {
+export function useNotasSaida(companyId: string, ano?: number, mes?: number) {
   return useQuery({
-    queryKey: queryKeys.notasSaida(companyId),
-    queryFn: () => fetchNotasSaida(companyId),
+    queryKey: queryKeys.notasSaida(companyId, { ano, mes }),
+    queryFn: () => fetchNotasSaida(companyId, ano, mes),
     enabled: !!companyId,
   });
 }

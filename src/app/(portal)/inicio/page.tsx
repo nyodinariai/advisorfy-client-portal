@@ -228,7 +228,7 @@ export default function InicioDashboard() {
               title="NFs enviadas este mês"
               value={nfeMes}
               icon={<FileText className="size-5" />}
-              href="/notas-fiscais"
+              href="/documentos"
             />
             <SummaryCard
               title="Guias pendentes"

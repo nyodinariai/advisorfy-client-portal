@@ -12,6 +12,9 @@ export const queryKeys = {
     ['funcionario-documentos', companyId, funcionarioId] as const,
   holerites: (companyId: string, filters?: object) => ['holerites', companyId, filters] as const,
   accounts: (companyId: string) => ['accounts', companyId] as const,
+  documentosResumo: (companyId: string, filters?: object) => ['documentos-resumo', companyId, filters] as const,
+  documentosHistorico: (companyId: string, typeId: string, filters?: object) =>
+    ['documentos-historico', companyId, typeId, filters] as const,
   dreMensal: (companyId: string, meses?: number) => ['dre-mensal', companyId, meses] as const,
   company: (companyId: string) => ['company', companyId] as const,
   assignment: (companyId: string) => ['assignment', companyId] as const,

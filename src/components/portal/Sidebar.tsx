@@ -20,7 +20,7 @@ import { useAuthStore } from '@/stores/authStore';
 const navItems = [
   { href: '/inicio', label: 'Início', icon: LayoutDashboard },
   { href: '/calendario', label: 'Calendário', icon: CalendarDays },
-  { href: '/notas-fiscais', label: 'Notas Fiscais', icon: FileText },
+  { href: '/documentos', label: 'Documentos', icon: FileText },
   { href: '/impostos', label: 'Impostos & Guias', icon: Receipt },
   { href: '/mensalidades', label: 'Mensalidades', icon: Wallet },
   { href: '/folha', label: 'Folha de Pagamento', icon: Users },

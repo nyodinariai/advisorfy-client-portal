@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/authStore';
 const PAGE_TITLES: Record<string, string> = {
   '/inicio': 'Início',
   '/calendario': 'Calendário',
-  '/notas-fiscais': 'Notas Fiscais',
+  '/documentos': 'Documentos',
   '/impostos': 'Impostos & Guias',
   '/folha': 'Folha de Pagamento',
   '/demonstracoes': 'Demonstrações',

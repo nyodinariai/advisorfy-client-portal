@@ -393,7 +393,7 @@ export default function CalendarioPage() {
               </div>
               {selectedEvent.type === 'deadline' && selectedEvent.category === 'NF' && (
                 <a
-                  href="/notas-fiscais"
+                  href="/documentos"
                   className="block rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 text-center text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
                 >
                   Enviar notas fiscais
