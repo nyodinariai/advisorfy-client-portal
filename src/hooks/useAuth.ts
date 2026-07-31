@@ -15,7 +15,7 @@ export async function acceptInvitation(
 }
 
 export function useAuth() {
-  const { user, token, setSession, clearSession } = useAuthStore();
+  const { user, setSession, clearSession } = useAuthStore();
   const router = useRouter();
 
   async function login(email: string, password: string): Promise<LoginResponse> {
@@ -24,29 +24,24 @@ export function useAuth() {
   }
 
   /**
-   * Finaliza a sessão a partir de um accessToken já emitido.
+   * Finaliza a sessão depois que o backend já emitiu os cookies httpOnly
+   * (login direto ou select-tenant, ambos já respondem com Set-Cookie).
    * LEADs são sempre redirecionados para /onboarding independente do redirectTo.
-   * Passa o token explicitamente no header porque o store ainda está vazio neste ponto.
    */
-  async function completeSessionWithToken(accessToken: string, redirectTo: string): Promise<void> {
-    const { data: me } = await axios.get<MeResponse>('/api/auth/me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  async function completeSessionWithToken(redirectTo: string): Promise<void> {
+    const { data: me } = await axios.get<MeResponse>('/api/auth/me');
 
-    setSession(
-      {
-        userId: me.userId,
-        tenantId: me.tenantId,
-        // No portal do cliente o tenant é a própria empresa (COMPANY) — não existe
-        // um companyId separado no JWT/MeResponse.
-        companyId: me.tenantId,
-        email: me.email,
-        name: me.name,
-        role: me.role,
-        permissions: me.permissions,
-      },
-      accessToken,
-    );
+    setSession({
+      userId: me.userId,
+      tenantId: me.tenantId,
+      // No portal do cliente o tenant é a própria empresa (COMPANY) — não existe
+      // um companyId separado no JWT/MeResponse.
+      companyId: me.tenantId,
+      email: me.email,
+      name: me.name,
+      role: me.role,
+      permissions: me.permissions,
+    });
 
     router.push(me.role === 'LEAD' ? '/onboarding' : redirectTo);
   }
@@ -56,19 +51,19 @@ export function useAuth() {
     tenantId: string,
     redirectTo = '/inicio',
   ): Promise<void> {
-    const { data } = await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
+    await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
       tenantId,
     });
-    await completeSessionWithToken(data.accessToken, redirectTo);
+    await completeSessionWithToken(redirectTo);
   }
 
   async function selectLeadTenant(preAuthToken: string, tenantId: string): Promise<void> {
-    const { data } = await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
+    await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
       tenantId,
     });
-    await completeSessionWithToken(data.accessToken, '/onboarding');
+    await completeSessionWithToken('/onboarding');
   }
 
   async function logout() {
@@ -82,5 +77,5 @@ export function useAuth() {
     }
   }
 
-  return { user, token, login, selectTenant, selectLeadTenant, completeSessionWithToken, logout };
+  return { user, login, selectTenant, selectLeadTenant, completeSessionWithToken, logout };
 }

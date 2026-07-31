@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { decodeJwt, isJwtValid } from '@/lib/jwt';
+import { decodeJwt } from '@/lib/jwt';
 
 const AUTH_PATHS = ['/login'];
 // Rotas públicas que não exigem sessão e não redirecionam usuário já logado —
@@ -18,8 +18,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Só a presença do cookie, não a validade — o access_token dura só 15min
+  // e é renovado sozinho via refresh_token (7 dias) no primeiro 401 (ver
+  // interceptor em lib/api.ts). Validar expiração aqui expulsava sessões
+  // válidas toda vez que a aba ficava mais de 15min sem fazer nenhuma
+  // chamada à API antes de navegar de novo.
   const token = request.cookies.get('access_token')?.value;
-  const authenticated = !!token && isJwtValid(token);
+  const authenticated = !!token;
 
   // Authenticated user hitting /login → redirect based on role
   if (AUTH_PATHS.some((p) => pathname.startsWith(p))) {

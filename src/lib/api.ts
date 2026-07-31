@@ -6,24 +6,21 @@ const REFRESH_TIMEOUT_MS = 10_000;
 
 const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/refresh', '/api/auth/select-tenant'];
 
+// O access token vive só no cookie httpOnly (access_token) — o backend já
+// aceita esse cookie diretamente, e o proxy same-origin (/api/[...path])
+// encaminha os cookies do navegador pro Spring sozinho. Por isso não existe
+// interceptor de request anexando Authorization aqui.
 const api = axios.create({
   baseURL: '',
   timeout: REFRESH_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((config) => {
-  const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => (config.url ?? '').includes(p));
-  const token = useAuthStore.getState().token;
-  if (token && !isAuthEndpoint) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
 let isRefreshing = false;
-let queue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
+let queue: Array<{ resolve: () => void; reject: (err: unknown) => void }> = [];
 
-function flushQueue(token: string | null, error: unknown) {
-  queue.forEach(({ resolve, reject }) => (token ? resolve(token) : reject(error)));
+function flushQueue(error: unknown) {
+  queue.forEach(({ resolve, reject }) => (error ? reject(error) : resolve()));
   queue = [];
 }
 
@@ -32,20 +29,16 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const req = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    const url = req?.url ?? '';
-    const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => url.includes(p));
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => (req?.url ?? '').includes(p));
 
     if (error.response?.status !== 401 || req?._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 
     if (isRefreshing) {
-      return new Promise<string>((resolve, reject) => {
+      return new Promise<void>((resolve, reject) => {
         queue.push({ resolve, reject });
-      }).then((newToken) => {
-        req.headers.Authorization = `Bearer ${newToken}`;
-        return api(req);
-      });
+      }).then(() => api(req));
     }
 
     req._retry = true;
@@ -54,39 +47,29 @@ api.interceptors.response.use(
     const { setSession, clearSession } = useAuthStore.getState();
 
     try {
-      const { data } = await axios.post<{ accessToken: string }>(
-        '/api/auth/refresh',
-        {},
-        { withCredentials: true, timeout: REFRESH_TIMEOUT_MS },
-      );
+      // refreshToken vive só como cookie HttpOnly — sem corpo, sem header:
+      // o navegador manda o cookie sozinho pro proxy same-origin.
+      await axios.post('/api/auth/refresh', {}, { timeout: REFRESH_TIMEOUT_MS });
 
-      // Busca o usuário via /me com o token novo — o authStore não é persistido,
-      // então `user` em memória está sempre null antes de uma sessão ser estabelecida.
-      const { data: me } = await axios.get<MeResponse>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${data.accessToken}` },
-        timeout: REFRESH_TIMEOUT_MS,
+      // Busca o usuário via /me — o cookie access_token novo já foi setado
+      // pela resposta do /refresh, então essa chamada já sai autenticada.
+      const { data: me } = await axios.get<MeResponse>('/api/auth/me', { timeout: REFRESH_TIMEOUT_MS });
+
+      setSession({
+        userId: me.userId,
+        tenantId: me.tenantId,
+        companyId: me.tenantId,
+        email: me.email,
+        name: me.name,
+        role: me.role,
+        permissions: me.permissions,
       });
-
-      setSession(
-        {
-          userId: me.userId,
-          tenantId: me.tenantId,
-          companyId: me.tenantId,
-          email: me.email,
-          name: me.name,
-          role: me.role,
-          permissions: me.permissions,
-        },
-        data.accessToken,
-      );
-      flushQueue(data.accessToken, null);
-      req.headers.Authorization = `Bearer ${data.accessToken}`;
+      flushQueue(null);
       return api(req);
     } catch (refreshErr) {
-      flushQueue(null, refreshErr);
+      flushQueue(refreshErr);
       clearSession();
-      // Chama logout para que o backend limpe o cookie httpOnly de refresh_token.
-      // Sem isso, o cookie expirado fica órfão no navegador entre tentativas de login.
+      // Chama logout para que o backend limpe os cookies httpOnly (access_token + refresh_token).
       try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* ignora */ }
       window.location.href = '/login';
       return Promise.reject(refreshErr);

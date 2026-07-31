@@ -1,35 +1,39 @@
 'use client';
 
 import { create } from 'zustand';
-import { decodeJwt } from '@/lib/jwt';
+import { persist } from 'zustand/middleware';
 import type { AuthUser } from '@/types/auth';
 
-const COOKIE_NAME = 'access_token';
-
-export function writeCookie(token: string) {
-  const exp = decodeJwt(token)?.exp;
-  const maxAge = typeof exp === 'number'
-    ? Math.max(0, exp - Math.floor(Date.now() / 1000))
-    : 60 * 60 * 24;
-  document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${maxAge}; samesite=lax`;
-}
+// Sinal cross-tab: authStore persiste só `user` (não-sensível) — o access
+// token vive exclusivamente no cookie httpOnly (o backend aceita esse cookie
+// direto, sem precisar de header Authorization). Um logout numa aba não avisa
+// as outras sozinho — outras abas só perceberiam no próximo 401 de alguma
+// chamada de API. Gravar esse timestamp dispara o evento nativo `storage`
+// nas outras abas (ver providers.tsx), que reagem imediatamente em vez de
+// esperar uma chamada falhar.
+export const LOGOUT_BROADCAST_KEY = 'auth:logout-broadcast';
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
-  setSession: (user: AuthUser, token: string) => void;
+  setSession: (user: AuthUser) => void;
   clearSession: () => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
-  user: null,
-  token: null,
-  setSession: (user, token) => {
-    set({ user, token });
-    writeCookie(token);
-  },
-  clearSession: () => {
-    set({ user: null, token: null });
-    document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
-  },
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      setSession: (user) => set({ user }),
+      clearSession: () => {
+        set({ user: null });
+        try {
+          localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+        } catch {
+          // localStorage indisponível (modo privado etc.) — sem sincronização
+          // cross-tab nesse caso, mas o logout local já aconteceu normalmente.
+        }
+      },
+    }),
+    { name: 'auth' }
+  )
+);
