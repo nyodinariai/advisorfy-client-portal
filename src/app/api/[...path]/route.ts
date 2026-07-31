@@ -19,25 +19,20 @@ async function forward(request: NextRequest, { params }: RouteContext) {
 
   const response = await fetch(url, { method: request.method, headers, body });
 
-  const nextRes = new NextResponse(response.body, {
+  const responseHeaders = new Headers();
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== 'set-cookie') responseHeaders.set(key, value);
+  });
+  // getSetCookie() preserves each Set-Cookie header as a separate entry
+  response.headers.getSetCookie().forEach((cookie) => {
+    responseHeaders.append('Set-Cookie', cookie);
+  });
+
+  return new NextResponse(response.body, {
     status: response.status,
     statusText: response.statusText,
+    headers: responseHeaders,
   });
-
-  // Copy all response headers except set-cookie (handled below)
-  response.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== 'set-cookie') nextRes.headers.set(key, value);
-  });
-
-  // Forward each Set-Cookie individually (preserves multiple cookies like refresh-token).
-  // Strip the backend's access_token cookie — the frontend manages it via authStore.
-  response.headers.getSetCookie().forEach((cookie) => {
-    if (!cookie.toLowerCase().startsWith('access_token=')) {
-      nextRes.headers.append('set-cookie', cookie);
-    }
-  });
-
-  return nextRes;
 }
 
 export const GET = forward;

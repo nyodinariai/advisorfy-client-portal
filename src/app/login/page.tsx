@@ -204,7 +204,7 @@ function LoginPageInner() {
     if ('accessToken' in res) {
       setIsAutoSelecting(true);
       try {
-        await completeSessionWithToken(res.accessToken, redirectTo);
+        await completeSessionWithToken(redirectTo);
       } catch {
         toast.error('Erro ao carregar dados do usuário. Tente novamente.');
         setIsAutoSelecting(false);

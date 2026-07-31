@@ -5,51 +5,29 @@ import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import axios from 'axios';
-import { useAuthStore, writeCookie } from '@/stores/authStore';
-import { isJwtValid } from '@/lib/jwt';
-import type { MeResponse } from '@/types/auth';
+import { LOGOUT_BROADCAST_KEY, useAuthStore } from '@/stores/authStore';
 
-function readCookie(name: string): string | null {
-  return document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${name}=`))
-    ?.split('=').slice(1).join('=') ?? null;
-}
+// `user` já é reidratado do localStorage pelo persist do authStore (o access
+// token vive só no cookie httpOnly — se ele tiver expirado, a próxima chamada
+// de API dispara o refresh/401 do interceptor em lib/api.ts). Este componente
+// só cuida da sincronização de logout entre abas.
+function AuthBroadcastListener() {
+  const clearSession = useAuthStore((s) => s.clearSession);
 
-function AuthHydrator() {
-  const { user, setSession } = useAuthStore();
-
+  // Logout numa outra aba/janela grava esse timestamp (ver authStore) — sem
+  // isso, esta aba só perceberia no próximo 401 de alguma chamada de API,
+  // deixando a UI mostrando uma sessão que já não existe mais.
   useEffect(() => {
-    if (user) return;
-
-    const token = readCookie('access_token');
-    if (!token || !isJwtValid(token)) return;
-
-    axios
-      .get<MeResponse>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then(({ data: me }) => {
-        setSession(
-          {
-            userId: me.userId,
-            tenantId: me.tenantId,
-            // No portal do cliente o tenant é a própria empresa (COMPANY).
-            companyId: me.tenantId,
-            email: me.email,
-            name: me.name,
-            role: me.role,
-            permissions: me.permissions,
-          },
-          token,
-        );
-        writeCookie(token);
-      })
-      .catch(() => {
-        // Cookie expirado ou inválido — middleware redirecionará na próxima navegação
-      });
-  }, [user, setSession]);
+    function onStorage(event: StorageEvent) {
+      if (event.key !== LOGOUT_BROADCAST_KEY || !event.newValue) return;
+      clearSession();
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [clearSession]);
 
   return null;
 }
@@ -71,7 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
         <TooltipProvider>
-          <AuthHydrator />
+          <AuthBroadcastListener />
           {children}
           <Toaster richColors position="top-right" />
         </TooltipProvider>
