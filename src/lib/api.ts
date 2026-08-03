@@ -4,7 +4,12 @@ import type { MeResponse } from '@/types/auth';
 
 const REFRESH_TIMEOUT_MS = 10_000;
 
-const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/refresh', '/api/auth/select-tenant'];
+const AUTH_ENDPOINTS = [
+  '/api/auth/login',
+  '/api/auth/refresh',
+  '/api/auth/select-tenant',
+  '/api/erp/users/accept-invitation',
+];
 
 // O access token vive só no cookie httpOnly (access_token) — o backend já
 // aceita esse cookie diretamente, e o proxy same-origin (/api/[...path])
