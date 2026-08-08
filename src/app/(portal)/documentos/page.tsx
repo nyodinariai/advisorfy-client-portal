@@ -22,7 +22,8 @@ import {
 } from '@/components/ui/select';
 import { useAuthStore } from '@/stores/authStore';
 import { useNfeStagingHistory, useNotasEntrada, useNotasSaida } from '@/features/nfe/queries';
-import { uploadNfeStaging } from '@/features/nfe/api';
+import { uploadNfeStagingEmLotes } from '@/features/nfe/api';
+import type { NfeUploadProgress } from '@/features/nfe/api';
 import { queryKeys } from '@/lib/query-keys';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { StagingFile } from '@/features/nfe/types';
@@ -150,6 +151,26 @@ function Dropzone({ files, onChange }: DropzoneProps) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function UploadProgressBar({ progress }: { progress: NfeUploadProgress }) {
+  const percent = Math.round((progress.arquivosEnviados / progress.totalArquivos) * 100);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">Enviando lote {progress.loteAtual} de {progress.totalLotes}…</span>
+        <span className="text-muted-foreground tabular-nums">
+          {progress.arquivosEnviados}/{progress.totalArquivos} arquivos
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -381,6 +402,7 @@ export default function DocumentosPage() {
 
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<NfeUploadProgress | null>(null);
   const [result, setResult] = useState<StagingFile[] | null>(null);
 
   const [nfSubTab, setNfSubTab] = useState<'entrada' | 'saida'>('entrada');
@@ -413,12 +435,16 @@ export default function DocumentosPage() {
       return;
     }
     setUploading(true);
+    setUploadProgress(null);
     try {
-      const res = await uploadNfeStaging(companyId, files);
+      const res = await uploadNfeStagingEmLotes(companyId, files, setUploadProgress);
       setResult(res.arquivos);
       setFiles([]);
+      const erros = res.arquivos.filter((f) => f.status === 'ERRO').length;
       toast.success(
-        `${res.recebidas} arquivo(s) recebido(s)${res.duplicadas > 0 ? `, ${res.duplicadas} duplicado(s)` : ''}.`
+        `${res.recebidas} arquivo(s) recebido(s)`
+        + `${res.duplicadas > 0 ? `, ${res.duplicadas} duplicado(s)` : ''}`
+        + `${erros > 0 ? `, ${erros} com erro` : ''}.`
       );
       queryClient.invalidateQueries({ queryKey: queryKeys.nfeStagingHistory(companyId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.notasEntrada(companyId) });
@@ -427,6 +453,7 @@ export default function DocumentosPage() {
       toast.error('Erro ao enviar arquivos. Tente novamente.');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -452,7 +479,9 @@ export default function DocumentosPage() {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {result ? (
+              {uploading && uploadProgress ? (
+                <UploadProgressBar progress={uploadProgress} />
+              ) : result ? (
                 <>
                   <UploadResult files={result} />
                   <Button variant="outline" onClick={() => setResult(null)}>
