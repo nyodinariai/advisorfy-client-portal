@@ -25,4 +25,6 @@ export const queryKeys = {
   minhaTransferencia: () => ['minha-transferencia'] as const,
   minhaTrocaContador: () => ['minha-troca-contador'] as const,
   minhaFaturamentoVerificado: () => ['minha-faturamento-verificado'] as const,
+  meusChamados: () => ['meus-chamados'] as const,
+  chamado: (id: string) => ['chamado', id] as const,
 };
