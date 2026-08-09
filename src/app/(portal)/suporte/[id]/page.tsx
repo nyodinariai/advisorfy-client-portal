@@ -1,28 +1,62 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, MessageSquare, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageSquare, Send } from 'lucide-react';
 import { useChamado, useEnviarMensagemChamado } from '@/features/suporte/queries';
-import { TIPO_LABELS, STATUS_LABELS, STATUS_COLORS } from '@/features/suporte/types';
+import { TIPO_LABELS, STATUS_LABELS, STATUS_COLORS, type TicketMensagem, type TicketLeitura } from '@/features/suporte/types';
+import { useTicketSocket } from '@/hooks/useTicketSocket';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Message, MessageAvatar, MessageContent, MessageHeader, MessageFooter } from '@/components/ui/message';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
+import { Marker, MarkerContent } from '@/components/ui/marker';
+import {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+} from '@/components/ui/message-scroller';
 
 function ptDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function ptHora(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+}
+
+function iniciais(nome: string | undefined) {
+  if (!nome) return '?';
+  const partes = nome.trim().split(/\s+/);
+  return ((partes[0]?.[0] ?? '') + (partes[partes.length - 1]?.[0] ?? '')).toUpperCase();
+}
+
+function foiVisto(mensagem: TicketMensagem, leituras: TicketLeitura[] | undefined) {
+  if (!leituras) return false;
+  return leituras.some(
+    (l) => l.userId !== mensagem.authorUserId && new Date(l.ultimaLeituraEm) >= new Date(mensagem.criadoEm)
+  );
 }
 
 export default function ChamadoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const [mensagem, setMensagem] = useState('');
 
-  const { data: chamado, isLoading } = useChamado(id);
+  const { connected, digitando, sendTyping, markRead } = useTicketSocket(id);
+  const { data: chamado, isLoading } = useChamado(id, { refetchInterval: connected ? false : 8000 });
   const enviarMensagem = useEnviarMensagemChamado(id);
+
+  const totalMensagens = chamado?.mensagens?.length ?? 0;
+  useEffect(() => {
+    if (totalMensagens > 0) markRead();
+  }, [totalMensagens, markRead]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -81,7 +115,12 @@ export default function ChamadoDetalhe() {
       </div>
 
       <div className="rounded-lg border bg-card p-4">
-        <p className="mb-3 text-sm font-medium text-muted-foreground">Conversa com a Advisorfy</p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-muted-foreground">Conversa com a Advisorfy</p>
+          <span className={`text-xs ${connected ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+            {connected ? '● Ao vivo' : '○ Reconectando…'}
+          </span>
+        </div>
 
         {(chamado.mensagens ?? []).length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
@@ -89,29 +128,43 @@ export default function ChamadoDetalhe() {
             Nenhuma mensagem ainda.
           </div>
         ) : (
-          <div className="max-h-96 space-y-2 overflow-y-auto pr-0.5">
-            {chamado.mensagens!.map((m) => {
-              const daAdvisorfy = m.authorRole.startsWith('NEWCO_');
-              return (
-                <div
-                  key={m.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    daAdvisorfy ? 'border-blue-200 bg-blue-50/50' : 'border-border bg-muted/30'
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium">
-                      {m.authorNome ?? (daAdvisorfy ? 'Advisorfy' : 'Você')}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {format(new Date(m.criadoEm), "dd/MM 'às' HH:mm", { locale: ptBR })}
-                    </span>
-                  </div>
-                  <p className="leading-relaxed text-foreground">{m.conteudo}</p>
-                </div>
-              );
-            })}
-          </div>
+          <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+            <MessageScroller className="max-h-96">
+              <MessageScrollerViewport>
+                <MessageScrollerContent>
+                  {chamado.mensagens!.map((m) => {
+                    const daAdvisorfy = m.authorRole.startsWith('NEWCO_');
+                    return (
+                      <MessageScrollerItem key={m.id} messageId={m.id}>
+                        <Message align={daAdvisorfy ? 'start' : 'end'}>
+                          <MessageAvatar>
+                            <Avatar><AvatarFallback>{iniciais(m.authorNome)}</AvatarFallback></Avatar>
+                          </MessageAvatar>
+                          <MessageContent>
+                            <MessageHeader>{m.authorNome ?? (daAdvisorfy ? 'Advisorfy' : 'Você')}</MessageHeader>
+                            <Bubble variant={daAdvisorfy ? 'muted' : 'default'}>
+                              <BubbleContent>{m.conteudo}</BubbleContent>
+                            </Bubble>
+                            <MessageFooter>
+                              {ptHora(m.criadoEm)}
+                              {!daAdvisorfy && foiVisto(m, chamado.leituras) && <span className="ml-1.5">· Visto</span>}
+                            </MessageFooter>
+                          </MessageContent>
+                        </Message>
+                      </MessageScrollerItem>
+                    );
+                  })}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton />
+            </MessageScroller>
+          </MessageScrollerProvider>
+        )}
+
+        {digitando && (
+          <Marker className="mt-2">
+            <MarkerContent className="animate-pulse">{digitando.authorNome} está digitando…</MarkerContent>
+          </Marker>
         )}
 
         {podeResponder ? (
@@ -121,12 +174,12 @@ export default function ChamadoDetalhe() {
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Responder…"
               value={mensagem}
-              onChange={(e) => setMensagem(e.target.value)}
+              onChange={(e) => { setMensagem(e.target.value); sendTyping(); }}
               disabled={enviarMensagem.isPending}
             />
             <div className="flex justify-end">
               <Button size="sm" type="submit" disabled={enviarMensagem.isPending || !mensagem.trim()}>
-                <Send className="mr-1.5 h-3.5 w-3.5" />
+                {enviarMensagem.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
                 {enviarMensagem.isPending ? 'Enviando…' : 'Enviar'}
               </Button>
             </div>

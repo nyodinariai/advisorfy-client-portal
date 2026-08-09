@@ -10,11 +10,12 @@ export function useMeusChamados() {
   });
 }
 
-export function useChamado(id?: string) {
+export function useChamado(id?: string, opts?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: queryKeys.chamado(id ?? ''),
     queryFn: () => fetchChamado(id!),
     enabled: !!id,
+    refetchInterval: opts?.refetchInterval,
   });
 }
 

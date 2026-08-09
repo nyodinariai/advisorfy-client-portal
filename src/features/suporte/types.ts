@@ -37,6 +37,11 @@ export interface TicketMensagem {
   criadoEm: string;
 }
 
+export interface TicketLeitura {
+  userId: string;
+  ultimaLeituraEm: string;
+}
+
 export interface Ticket {
   id: string;
   titulo: string;
@@ -47,6 +52,7 @@ export interface Ticket {
   criadoEm: string;
   resolvidoEm?: string | null;
   mensagens?: TicketMensagem[];
+  leituras?: TicketLeitura[];
 }
 
 export interface AbrirChamadoInput {
