@@ -20,6 +20,16 @@ const schema = z.object({
 
 type LoginForm = z.infer<typeof schema>;
 
+// Uma empresa cliente pode ter, pra mesma pessoa, um vínculo de papel PME (dono/usuário
+// da empresa) e, separadamente, um vínculo ACCOUNTANT (o escritório que atende essa
+// empresa também aparece como um "tenant tipo COMPANY" pro contador, via o acesso que
+// todo contador do escritório ganha a cada cliente). O client portal só faz sentido pro
+// papel PME — mostrar os dois deixaria a pessoa "entrar como cliente" numa sessão que na
+// verdade é de contador, e toda chamada de API do portal voltaria 403.
+function isPmeRole(role: string): boolean {
+  return role.startsWith('PME_');
+}
+
 // ---------------------------------------------------------------------------
 // Step 1 — Credentials
 // ---------------------------------------------------------------------------
@@ -113,12 +123,14 @@ function TenantStep({
   const { selectTenant } = useAuth();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const companyTenants: TenantInfo[] = preAuth.tenants.filter((t) => t.tenantType === 'COMPANY');
+  const companyTenants: TenantInfo[] = preAuth.tenants.filter(
+    (t) => t.tenantType === 'COMPANY' && isPmeRole(t.role),
+  );
 
   async function handleSelect(tenant: TenantInfo) {
     setLoadingId(tenant.tenantId);
     try {
-      await selectTenant(preAuth.preAuthToken, tenant.tenantId, redirectTo);
+      await selectTenant(preAuth.preAuthToken, tenant.tenantId, tenant.role, redirectTo);
     } catch {
       toast.error('Não foi possível acessar esta empresa. Tente novamente.');
       setLoadingId(null);
@@ -217,7 +229,7 @@ function LoginPageInner() {
     if (leadTenants.length > 0) {
       setIsAutoSelecting(true);
       try {
-        await selectLeadTenant(res.preAuthToken, leadTenants[0].tenantId);
+        await selectLeadTenant(res.preAuthToken, leadTenants[0].tenantId, leadTenants[0].role);
       } catch {
         toast.error('Não foi possível acessar o portal. Tente novamente.');
         setIsAutoSelecting(false);
@@ -225,12 +237,14 @@ function LoginPageInner() {
       return;
     }
 
-    const companyTenants = res.tenants.filter((t: TenantInfo) => t.tenantType === 'COMPANY');
+    const companyTenants = res.tenants.filter(
+      (t: TenantInfo) => t.tenantType === 'COMPANY' && isPmeRole(t.role),
+    );
 
     if (companyTenants.length === 1) {
       setIsAutoSelecting(true);
       try {
-        await selectTenant(res.preAuthToken, companyTenants[0].tenantId, redirectTo);
+        await selectTenant(res.preAuthToken, companyTenants[0].tenantId, companyTenants[0].role, redirectTo);
       } catch {
         toast.error('Não foi possível acessar a empresa. Tente novamente.');
         setIsAutoSelecting(false);

@@ -46,22 +46,28 @@ export function useAuth() {
     router.push(me.role === 'LEAD' ? '/onboarding' : redirectTo);
   }
 
+  /** role é obrigatório porque a mesma pessoa pode ter mais de um papel no mesmo tenant
+   *  (ex.: contador que também é cliente da própria empresa) — sem isso o backend não
+   *  saberia qual vínculo ativar. */
   async function selectTenant(
     preAuthToken: string,
     tenantId: string,
+    role: string,
     redirectTo = '/inicio',
   ): Promise<void> {
     await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
       tenantId,
+      role,
     });
     await completeSessionWithToken(redirectTo);
   }
 
-  async function selectLeadTenant(preAuthToken: string, tenantId: string): Promise<void> {
+  async function selectLeadTenant(preAuthToken: string, tenantId: string, role: string): Promise<void> {
     await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
       tenantId,
+      role,
     });
     await completeSessionWithToken('/onboarding');
   }
