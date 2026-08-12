@@ -14,11 +14,13 @@ import {
   ChevronDown,
   Wallet,
   LifeBuoy,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermission } from '@/hooks/usePermission';
 
-const navItems = [
+const baseNavItems = [
   { href: '/inicio', label: 'Início', icon: LayoutDashboard },
   { href: '/calendario', label: 'Calendário', icon: CalendarDays },
   { href: '/documentos', label: 'Documentos', icon: FileText },
@@ -34,6 +36,11 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
+  const canManageUsers = usePermission('users:manage');
+
+  const navItems = canManageUsers
+    ? [...baseNavItems, { href: '/equipe', label: 'Equipe', icon: UserCog }]
+    : baseNavItems;
 
   const initial = user?.name?.charAt(0).toUpperCase() ?? '?';
 
