@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { buscarCartaoSalvo, criarSetupIntent, listarMensalidades } from './api';
+import {
+  buscarCartaoSalvo,
+  criarSetupIntent,
+  listarMensalidades,
+  pagarFaturaComCartao,
+} from './api';
 
 export function useMensalidades() {
   return useQuery({
@@ -19,6 +24,13 @@ export function useCriarSetupIntent() {
   return useMutation({ mutationFn: criarSetupIntent });
 }
 
+export function usePagarFaturaComCartao() {
+  return useMutation({
+    mutationFn: ({ mensalidadeId, paymentMethodId }: { mensalidadeId: string; paymentMethodId?: string }) =>
+      pagarFaturaComCartao(mensalidadeId, paymentMethodId),
+  });
+}
+
 /** Refetch do status do cartão com um pequeno atraso — o backend só sabe que o cartão foi
  *  salvo quando o webhook setup_intent.succeeded do Stripe chega, o que pode levar um instante
  *  depois da confirmação no navegador. */
@@ -26,5 +38,15 @@ export function useRefetchCartaoAposSetup() {
   const qc = useQueryClient();
   return () => {
     setTimeout(() => qc.invalidateQueries({ queryKey: ['portal', 'cartao-salvo'] }), 1500);
+  };
+}
+
+/** Refetch da mensalidade com um pequeno atraso após o pagamento — o status só vira PAGO
+ *  quando o webhook invoice.paid do Stripe chega, o que pode levar um instante depois da
+ *  confirmação no navegador. */
+export function useRefetchMensalidadesAposPagamento() {
+  const qc = useQueryClient();
+  return () => {
+    setTimeout(() => qc.invalidateQueries({ queryKey: ['portal', 'mensalidades'] }), 1500);
   };
 }

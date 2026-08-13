@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, CreditCard, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MensalidadeStatusBadge } from '@/components/financeiro/MensalidadeStatusBadge';
+import { PagarFaturaDialog } from '@/components/financeiro/PagarFaturaDialog';
 import { useMensalidades } from '@/features/financeiro/queries';
 import { parseLinhas } from '@/features/financeiro/types';
 import { useCompany, useAssignment } from '@/features/accounting/queries';
@@ -29,6 +31,7 @@ export default function FaturaMensalidadePage() {
   const { id } = useParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
   const companyId = user?.companyId ?? '';
+  const [pagarFaturaOpen, setPagarFaturaOpen] = useState(false);
 
   const { data: mensalidades, isLoading } = useMensalidades();
   const { data: company } = useCompany(companyId);
@@ -60,7 +63,7 @@ export default function FaturaMensalidadePage() {
   const numeroFatura = `${m.referenciaAno}${String(m.referenciaMes).padStart(2, '0')}-${m.id.slice(0, 8).toUpperCase()}`;
   const empresaNome = company?.nomeFantasia ?? company?.razaoSocial ?? user?.name ?? '';
   const escritorioNome = assignment?.accountantName ?? 'seu escritório contábil';
-  const podePagar = (m.status === 'PENDENTE' || m.status === 'VENCIDO') && !!m.stripeHostedInvoiceUrl;
+  const podePagar = m.status === 'PENDENTE' || m.status === 'VENCIDO';
 
   return (
     <div className="-m-7 min-h-full bg-muted/30 print:bg-white">
@@ -180,16 +183,15 @@ export default function FaturaMensalidadePage() {
 
             {podePagar && (
               <div className="mt-6 flex flex-col items-end gap-2">
-                <Button
-                  className="print:hidden"
-                  render={<a href={m.stripeHostedInvoiceUrl!} target="_blank" rel="noreferrer" />}
-                >
+                <Button className="print:hidden" onClick={() => setPagarFaturaOpen(true)}>
                   <CreditCard className="size-4" />
                   Pagar fatura
                 </Button>
-                <p className="hidden break-all text-right text-xs text-neutral-500 print:block">
-                  Pague online: {m.stripeHostedInvoiceUrl}
-                </p>
+                {m.stripeHostedInvoiceUrl && (
+                  <p className="hidden break-all text-right text-xs text-neutral-500 print:block">
+                    Pague online: {m.stripeHostedInvoiceUrl}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -201,6 +203,8 @@ export default function FaturaMensalidadePage() {
           </div>
         </div>
       </div>
+
+      <PagarFaturaDialog mensalidade={m} open={pagarFaturaOpen} onOpenChange={setPagarFaturaOpen} />
     </div>
   );
 }
