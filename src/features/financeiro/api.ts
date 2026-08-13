@@ -15,3 +15,8 @@ export async function criarSetupIntent(): Promise<string> {
   const { data } = await api.post<{ clientSecret: string }>('/api/portal/financeiro/pagamento/setup-intent');
   return data.clientSecret;
 }
+
+/** Sem paymentMethodId, o backend usa o cartão salvo (cobrança automática) do tenant. */
+export async function pagarFaturaComCartao(mensalidadeId: string, paymentMethodId?: string): Promise<void> {
+  await api.post(`/api/portal/financeiro/mensalidades/${mensalidadeId}/pagar`, { paymentMethodId });
+}
