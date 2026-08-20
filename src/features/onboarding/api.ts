@@ -13,11 +13,11 @@ export async function fetchLeadDocumentos(): Promise<DocumentoResumo[]> {
 
 export async function enviarDocumento(
   docId: string,
-  urlArquivo: string,
+  storageKey: string,
 ): Promise<DocumentoResumo> {
   const { data } = await api.patch<DocumentoResumo>(
     `/api/lead/documentos/${docId}/enviar`,
-    { urlArquivo },
+    { storageKey },
   );
   return data;
 }

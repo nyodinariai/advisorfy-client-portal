@@ -90,8 +90,8 @@ export function useFuncionarioDocumentos(companyId: string, funcionarioId: strin
 export function useEnviarFuncionarioDocumento(companyId: string, funcionarioId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
-      enviarFuncionarioDocumento(companyId, funcionarioId as string, docId, urlArquivo),
+    mutationFn: ({ docId, storageKey }: { docId: string; storageKey: string }) =>
+      enviarFuncionarioDocumento(companyId, funcionarioId as string, docId, storageKey),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.funcionarioDocumentos(companyId, funcionarioId ?? ''),

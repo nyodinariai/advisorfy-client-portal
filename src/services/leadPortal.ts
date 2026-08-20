@@ -8,8 +8,8 @@ export const leadPortalService = {
   getDocumentos: () =>
     api.get<DocumentoResumo[]>('/api/lead/documentos').then((r) => r.data),
 
-  enviarDocumento: (docId: string, urlArquivo: string) =>
+  enviarDocumento: (docId: string, storageKey: string) =>
     api
-      .patch<DocumentoResumo>(`/api/lead/documentos/${docId}/enviar`, { urlArquivo })
+      .patch<DocumentoResumo>(`/api/lead/documentos/${docId}/enviar`, { storageKey })
       .then((r) => r.data),
 };
