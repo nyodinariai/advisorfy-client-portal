@@ -45,22 +45,22 @@ export async function fetchMinhaTransferencia(): Promise<TransferenciaResponse |
 export async function enviarDocumentoAbertura(
   aberturaId: string,
   docId: string,
-  urlArquivo: string
+  storageKey: string
 ): Promise<DocumentoResumo> {
   const { data } = await api.patch<DocumentoResumo>(
     `/api/client/legalizacao/abertura/${aberturaId}/documentos/${docId}/enviar`,
-    { urlArquivo }
+    { storageKey }
   );
   return data;
 }
 
 export async function enviarDocumentoTransferencia(
   docId: string,
-  urlArquivo: string
+  storageKey: string
 ): Promise<DocumentoResumo> {
   const { data } = await api.patch<DocumentoResumo>(
     `/api/client/legalizacao/transferencia/documentos/${docId}/enviar`,
-    { urlArquivo }
+    { storageKey }
   );
   return data;
 }
@@ -81,11 +81,11 @@ export async function fetchMinhaTrocaContador(): Promise<TransferenciaResponse |
 export async function enviarDocumentoTrocaContador(
   transferenciaId: string,
   docId: string,
-  urlArquivo: string
+  storageKey: string
 ): Promise<DocumentoResumo> {
   const { data } = await api.patch<DocumentoResumo>(
     `/api/client/legalizacao/troca-contador/${transferenciaId}/documentos/${docId}/enviar`,
-    { urlArquivo }
+    { storageKey }
   );
   return data;
 }
@@ -236,12 +236,12 @@ export async function confirmarCorrecoesVistoria(aberturaId: string): Promise<vo
 export async function enviarComprovantePagamento(
   aberturaId: string,
   etapaId: string,
-  url: string,
+  storageKey: string,
   nome: string
 ): Promise<void> {
   await api.post(
     `/api/client/legalizacao/abertura/${aberturaId}/etapas/${etapaId}/comprovante-pagamento`,
-    { url, nome }
+    { storageKey, nome }
   );
 }
 

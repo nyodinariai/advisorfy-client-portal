@@ -1616,7 +1616,7 @@ function EtapaItem({
 // State B — Document upload card
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: string, urlArquivo: string) => Promise<unknown> }) {
+function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: string, storageKey: string) => Promise<unknown> }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const canUpload = doc.status === 'PENDENTE' || doc.status === 'REJEITADO';
@@ -1626,8 +1626,8 @@ function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: st
     if (!file) return;
     setUploading(true);
     try {
-      const urlArquivo = await uploadFile(file);
-      await onEnviar(doc.id, urlArquivo);
+      const { key } = await uploadFile(file);
+      await onEnviar(doc.id, key);
       toast.success('Documento enviado com sucesso!');
     } catch {
       toast.error('Erro ao enviar documento. Tente novamente.');
@@ -1680,7 +1680,7 @@ function DocCard({ doc, onEnviar }: { doc: DocumentoResumo; onEnviar: (docId: st
   );
 }
 
-function DocsSection({ title, docs, onEnviar }: { title: string; docs: DocumentoResumo[]; onEnviar?: (docId: string, urlArquivo: string) => Promise<unknown> }) {
+function DocsSection({ title, docs, onEnviar }: { title: string; docs: DocumentoResumo[]; onEnviar?: (docId: string, storageKey: string) => Promise<unknown> }) {
   if (docs.length === 0) return null;
   const grouped = docs.reduce<Record<string, DocumentoResumo[]>>((acc, doc) => {
     const key = BLOCO_LABEL_CLIENTE[doc.bloco] ?? doc.bloco;
@@ -3127,7 +3127,7 @@ function EtapaDetalhePanel({
   onConfirmarProntidaoVistoria?: () => void;
   onConfirmarCorrecoesVistoria?: () => void;
   onEnviarCertificadoDigital?: (file: File, senha: string) => Promise<unknown>;
-  onEnviarComprovante?: (etapaId: string, url: string, nome: string) => Promise<unknown>;
+  onEnviarComprovante?: (etapaId: string, storageKey: string, nome: string) => Promise<unknown>;
 }) {
   const allEtapas = [...(abertura.etapas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
   const isViabilidade = etapa.etapa === 'CONSULTA_VIABILIDADE';
@@ -3338,7 +3338,7 @@ function EtapaDetalhePanel({
         <PagamentoTaxasJuceparPanel
           anexos={etapa.anexos ?? []}
           onEnviarComprovante={onEnviarComprovante
-            ? (url, nome) => onEnviarComprovante(etapa.id, url, nome)
+            ? (storageKey, nome) => onEnviarComprovante(etapa.id, storageKey, nome)
             : undefined}
         />
       )}
@@ -3350,7 +3350,7 @@ function EtapaDetalhePanel({
           onConfirmarProntidao={etapa.status === 'EM_ANDAMENTO' ? onConfirmarProntidaoVistoria : undefined}
           onConfirmarCorrecoes={etapa.status === 'EM_ANDAMENTO' ? onConfirmarCorrecoesVistoria : undefined}
           onEnviarComprovante={onEnviarComprovante && etapa.status === 'EM_ANDAMENTO'
-            ? (url, nome) => onEnviarComprovante(etapa.id, url, nome)
+            ? (storageKey, nome) => onEnviarComprovante(etapa.id, storageKey, nome)
             : undefined}
         />
       )}
@@ -3625,7 +3625,7 @@ function EmpresaAbertaPanel({ abertura }: { abertura: AberturaResponse }) {
   );
 }
 
-function ComprovanteUploadButton({ onEnviar }: { onEnviar: (url: string, nome: string) => Promise<unknown> }) {
+function ComprovanteUploadButton({ onEnviar }: { onEnviar: (storageKey: string, nome: string) => Promise<unknown> }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -3634,8 +3634,8 @@ function ComprovanteUploadButton({ onEnviar }: { onEnviar: (url: string, nome: s
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadFile(file);
-      await onEnviar(url, file.name);
+      const { key } = await uploadFile(file);
+      await onEnviar(key, file.name);
       toast.success('Comprovante enviado!');
     } catch {
       toast.error('Erro ao enviar comprovante. Tente novamente.');
@@ -3670,7 +3670,7 @@ function PagamentoTaxasJuceparPanel({
   onEnviarComprovante,
 }: {
   anexos: AnexoLegalizacao[];
-  onEnviarComprovante?: (url: string, nome: string) => Promise<unknown>;
+  onEnviarComprovante?: (storageKey: string, nome: string) => Promise<unknown>;
 }) {
   const guia = anexos.find(a => a.contexto === 'GUIA_PAGAMENTO');
   const comprovante = anexos.find(a => a.contexto === 'COMPROVANTE_PAGAMENTO');
@@ -3752,7 +3752,7 @@ function VistoriaBombeirosClientePanel({
   anexos: AnexoLegalizacao[];
   onConfirmarProntidao?: () => void;
   onConfirmarCorrecoes?: () => void;
-  onEnviarComprovante?: (url: string, nome: string) => Promise<unknown>;
+  onEnviarComprovante?: (storageKey: string, nome: string) => Promise<unknown>;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [correcoesOpen, setCorrecoesOpen] = useState(false);
@@ -4280,7 +4280,7 @@ function ProcessoStepPanel({
   estrutura?: AberturaEstruturaResponse;
   estruturaLoading: boolean;
   docCliente: DocumentoResumo[];
-  onEnviarDoc: (docId: string, url: string) => Promise<unknown>;
+  onEnviarDoc: (docId: string, storageKey: string) => Promise<unknown>;
   minutas?: MinutaContratoSocial[];
   onAprovarMinuta?: () => void;
   onSolicitarAlteracaoMinuta?: (obs: string) => void;
@@ -4289,7 +4289,7 @@ function ProcessoStepPanel({
   onConfirmarProntidaoVistoria?: () => void;
   onConfirmarCorrecoesVistoria?: () => void;
   onEnviarCertificadoDigital?: (file: File, senha: string) => Promise<unknown>;
-  onEnviarComprovante?: (etapaId: string, url: string, nome: string) => Promise<unknown>;
+  onEnviarComprovante?: (etapaId: string, storageKey: string, nome: string) => Promise<unknown>;
 }) {
   if (step.id === 'FORMULARIO') {
     return (
@@ -4533,7 +4533,7 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
             estrutura={estrutura}
             estruturaLoading={estruturaLoading}
             docCliente={docCliente}
-            onEnviarDoc={(docId, url) => enviarDoc({ aberturaId: abertura.id, docId, urlArquivo: url })}
+            onEnviarDoc={(docId, storageKey) => enviarDoc({ aberturaId: abertura.id, docId, storageKey })}
             minutas={minutasData}
             onAprovarMinuta={() => { aprovarMinutaMutate(abertura.id); toast.success('Minuta aprovada!') }}
             onSolicitarAlteracaoMinuta={obs => { solicitarAlteracaoMutate({ aberturaId: abertura.id, observacoes: obs }); toast.success('Solicitação enviada ao escritório') }}
@@ -4542,7 +4542,7 @@ export function AberturaOnboarding({ embedded = false }: { embedded?: boolean })
             onConfirmarProntidaoVistoria={() => { confirmarProntidaoVistoriaMutate(abertura.id); toast.success('Prontidão confirmada!') }}
             onConfirmarCorrecoesVistoria={() => { confirmarCorrecoesVistoriaMutate(abertura.id); toast.success('Correções confirmadas!') }}
             onEnviarCertificadoDigital={(file, senha) => enviarCertificadoDigitalMutate({ aberturaId: abertura.id, file, senha })}
-            onEnviarComprovante={(etapaId, url, nome) => enviarComprovanteMutate({ aberturaId: abertura.id, etapaId, url, nome })}
+            onEnviarComprovante={(etapaId, storageKey, nome) => enviarComprovanteMutate({ aberturaId: abertura.id, etapaId, storageKey, nome })}
           />
         </CardContent>
       </Card>

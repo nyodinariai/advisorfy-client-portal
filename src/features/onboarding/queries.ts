@@ -21,8 +21,8 @@ export function useLeadDocumentos() {
 export function useEnviarDocumento() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
-      enviarDocumento(docId, urlArquivo),
+    mutationFn: ({ docId, storageKey }: { docId: string; storageKey: string }) =>
+      enviarDocumento(docId, storageKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.leadDocumentos() });
       queryClient.invalidateQueries({ queryKey: queryKeys.leadStatus() });

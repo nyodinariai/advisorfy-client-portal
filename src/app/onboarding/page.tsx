@@ -57,8 +57,8 @@ function DocumentRow({ doc }: { doc: DocumentoResumo }) {
   const tipoDocumento = doc.tipoDocumento ?? doc.tipo ?? 'OUTRO';
 
   const { mutate, isPending: enviando } = useMutation({
-    mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
-      leadPortalService.enviarDocumento(docId, urlArquivo),
+    mutationFn: ({ docId, storageKey }: { docId: string; storageKey: string }) =>
+      leadPortalService.enviarDocumento(docId, storageKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.leadStatus() });
       toast.success('Documento enviado com sucesso!');
@@ -74,8 +74,8 @@ function DocumentRow({ doc }: { doc: DocumentoResumo }) {
     if (!file) return;
     setUploading(true);
     try {
-      const urlArquivo = await uploadFile(file);
-      mutate({ docId: doc.id, urlArquivo });
+      const { key } = await uploadFile(file);
+      mutate({ docId: doc.id, storageKey: key });
     } catch {
       toast.error('Erro ao enviar documento. Tente novamente.');
     } finally {

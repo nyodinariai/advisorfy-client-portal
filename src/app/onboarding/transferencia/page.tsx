@@ -171,7 +171,7 @@ function DocCard({
   onEnviar,
 }: {
   doc: DocumentoResumo;
-  onEnviar: (docId: string, urlArquivo: string) => Promise<unknown>;
+  onEnviar: (docId: string, storageKey: string) => Promise<unknown>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -182,8 +182,8 @@ function DocCard({
     if (!file) return;
     setUploading(true);
     try {
-      const urlArquivo = await uploadFile(file);
-      await onEnviar(doc.id, urlArquivo);
+      const { key } = await uploadFile(file);
+      await onEnviar(doc.id, key);
       toast.success('Documento enviado com sucesso!');
     } catch {
       toast.error('Erro ao enviar documento. Tente novamente.');
@@ -267,7 +267,7 @@ function DocsSection({
 }: {
   title: string;
   docs: DocumentoResumo[];
-  onEnviar?: (docId: string, urlArquivo: string) => Promise<unknown>;
+  onEnviar?: (docId: string, storageKey: string) => Promise<unknown>;
   adminMode?: boolean;
 }) {
   if (docs.length === 0) return null;
@@ -633,7 +633,7 @@ export function TransferenciaOnboarding({ embedded = false }: { embedded?: boole
         <DocsSection
           title="Documentos necessários"
           docs={docCliente}
-          onEnviar={(docId, url) => enviarDoc({ transferenciaId: transferencia.id, docId, urlArquivo: url })}
+          onEnviar={(docId, storageKey) => enviarDoc({ transferenciaId: transferencia.id, docId, storageKey })}
         />
       )}
 

@@ -58,8 +58,8 @@ function DocumentoChecklistItem({
     if (!file) return;
     setUploading(true);
     try {
-      const urlArquivo = await uploadFile(file);
-      await enviar({ docId: doc.id, urlArquivo });
+      const { key } = await uploadFile(file);
+      await enviar({ docId: doc.id, storageKey: key });
       toast.success('Documento enviado.');
     } catch {
       toast.error('Erro ao enviar documento. Tente novamente.');

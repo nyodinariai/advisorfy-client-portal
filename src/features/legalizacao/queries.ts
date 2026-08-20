@@ -84,8 +84,8 @@ export function useResponderFaturamentoVerificado() {
 export function useEnviarDocumentoAbertura() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ aberturaId, docId, urlArquivo }: { aberturaId: string; docId: string; urlArquivo: string }) =>
-      enviarDocumentoAbertura(aberturaId, docId, urlArquivo),
+    mutationFn: ({ aberturaId, docId, storageKey }: { aberturaId: string; docId: string; storageKey: string }) =>
+      enviarDocumentoAbertura(aberturaId, docId, storageKey),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
   });
 }
@@ -93,8 +93,8 @@ export function useEnviarDocumentoAbertura() {
 export function useEnviarDocumentoTransferencia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ docId, urlArquivo }: { docId: string; urlArquivo: string }) =>
-      enviarDocumentoTransferencia(docId, urlArquivo),
+    mutationFn: ({ docId, storageKey }: { docId: string; storageKey: string }) =>
+      enviarDocumentoTransferencia(docId, storageKey),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaTransferencia() }),
   });
 }
@@ -105,12 +105,12 @@ export function useEnviarDocumentoTrocaContador() {
     mutationFn: ({
       transferenciaId,
       docId,
-      urlArquivo,
+      storageKey,
     }: {
       transferenciaId: string;
       docId: string;
-      urlArquivo: string;
-    }) => enviarDocumentoTrocaContador(transferenciaId, docId, urlArquivo),
+      storageKey: string;
+    }) => enviarDocumentoTrocaContador(transferenciaId, docId, storageKey),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaTrocaContador() }),
   });
 }
@@ -265,8 +265,8 @@ export function useConfirmarCorrecoesVistoria() {
 export function useEnviarComprovantePagamento() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ aberturaId, etapaId, url, nome }: { aberturaId: string; etapaId: string; url: string; nome: string }) =>
-      enviarComprovantePagamento(aberturaId, etapaId, url, nome),
+    mutationFn: ({ aberturaId, etapaId, storageKey, nome }: { aberturaId: string; etapaId: string; storageKey: string; nome: string }) =>
+      enviarComprovantePagamento(aberturaId, etapaId, storageKey, nome),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.minhaAbertura() }),
   });
 }

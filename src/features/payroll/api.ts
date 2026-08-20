@@ -78,11 +78,11 @@ export async function enviarFuncionarioDocumento(
   companyId: string,
   funcionarioId: string,
   docId: string,
-  urlArquivo: string
+  storageKey: string
 ): Promise<FuncionarioDocumento> {
   const { data } = await api.post<FuncionarioDocumento>(
     `/api/portal/companies/${companyId}/folha/funcionarios/${funcionarioId}/documentos/${docId}/enviar`,
-    { urlArquivo }
+    { storageKey }
   );
   return data;
 }
