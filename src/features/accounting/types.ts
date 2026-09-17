@@ -31,6 +31,7 @@ export interface Company {
   nomeFantasia?: string;
   cnpj?: string;
   regimeTributario: string;
-  tipoAtividade: string;
+  /** Derivado do(s) CNAE(s) — uma empresa pode ter mais de um tipo. */
+  tiposAtividade: string[];
   status: string;
 }

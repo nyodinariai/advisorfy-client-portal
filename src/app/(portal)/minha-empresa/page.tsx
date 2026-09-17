@@ -437,8 +437,10 @@ export default function MinhaEmpresaPage() {
               <DetailRow
                 label="Tipo de Atividade"
                 value={
-                  company?.tipoAtividade
-                    ? ATIVIDADE_LABELS[company.tipoAtividade] ?? company.tipoAtividade
+                  company?.tiposAtividade && company.tiposAtividade.length > 0
+                    ? company.tiposAtividade
+                        .map((t) => ATIVIDADE_LABELS[t] ?? t)
+                        .join(', ')
                     : undefined
                 }
               />
