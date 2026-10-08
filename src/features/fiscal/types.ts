@@ -25,6 +25,32 @@ export interface ObrigacaoAcessoria {
   status: string;
 }
 
+/** Guia publicada pelo escritório (PIS, COFINS, IRPJ, CSLL, ICMS, ISS). `statusEfetivo` é o que vale para o
+ *  cliente: guia enviada cuja apuração mudou depois da publicação aparece como substituída. */
+export type TributoGuia = 'PIS' | 'COFINS' | 'IRPJ' | 'CSLL' | 'ICMS' | 'ISS' | 'DAS';
+export type StatusGuiaCliente = 'ENVIADA' | 'PAGA' | 'SUBSTITUIDA';
+export type ConfirmacaoPagamento = 'CLIENTE' | 'ESCRITORIO' | 'RECEITA_FEDERAL';
+
+export interface GuiaCliente {
+  id: string;
+  tributo: TributoGuia;
+  competenciaAno: number;
+  competenciaMes: number;
+  vencimento: string;
+  valor: number;
+  status: StatusGuiaCliente;
+  statusEfetivo: StatusGuiaCliente;
+  desatualizada: boolean;
+  valorAtualApuracao: number | null;
+  arquivoNome: string;
+  arquivoUrl: string | null;
+  comprovanteNome: string | null;
+  comprovanteUrl: string | null;
+  pagoEm: string | null;
+  confirmacaoPagamento: ConfirmacaoPagamento | null;
+  enviadaEm: string;
+}
+
 // ─── Comparativo de regimes tributários (painel do cliente) ──────────────────
 
 export type RegimeComparado = 'SIMPLES' | 'PRESUMIDO' | 'REAL';

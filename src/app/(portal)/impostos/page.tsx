@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { useAuthStore } from '@/stores/authStore';
 import { useDas, useApuracao, useObrigacoes } from '@/features/fiscal/queries';
+import { GuiasAPagar } from '@/features/fiscal/GuiasAPagar';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Das } from '@/features/fiscal/types';
 
@@ -129,12 +130,18 @@ export default function ImpostosPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Impostos</h1>
 
-      <Tabs defaultValue="das">
+      <Tabs defaultValue="guias">
         <TabsList>
+          <TabsTrigger value="guias">Guias a pagar</TabsTrigger>
           <TabsTrigger value="das">DAS — Simples Nacional</TabsTrigger>
           <TabsTrigger value="apuracao">Apuração</TabsTrigger>
           <TabsTrigger value="obrigacoes">Obrigações Acessórias</TabsTrigger>
         </TabsList>
+
+        {/* Guias publicadas pelo escritório (DARF, ICMS, ISS) */}
+        <TabsContent value="guias" className="mt-4">
+          <GuiasAPagar companyId={companyId} />
+        </TabsContent>
 
         {/* DAS */}
         <TabsContent value="das" className="mt-4">
