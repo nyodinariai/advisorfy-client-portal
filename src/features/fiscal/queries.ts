@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { fetchDas, fetchApuracao, fetchObrigacoes, fetchComparativoRegimes } from './api';
+import { fetchDas, fetchApuracao, fetchObrigacoes, fetchGuias, fetchComparativoRegimes, anexarComprovanteGuia, marcarGuiaPaga } from './api';
 
 export function useDas(companyId: string) {
   return useQuery({
@@ -23,6 +23,30 @@ export function useObrigacoes(companyId: string) {
     queryKey: queryKeys.obrigacoes(companyId),
     queryFn: () => fetchObrigacoes(companyId),
     enabled: !!companyId,
+  });
+}
+
+export function useGuias(companyId: string) {
+  return useQuery({
+    queryKey: queryKeys.guiasImpostos(companyId),
+    queryFn: () => fetchGuias(companyId),
+    enabled: !!companyId,
+  });
+}
+
+export function useAnexarComprovanteGuia(companyId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ guiaId, arquivo }: { guiaId: string; arquivo: File }) => anexarComprovanteGuia(companyId, guiaId, arquivo),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.guiasImpostos(companyId) }),
+  });
+}
+
+export function useMarcarGuiaPaga(companyId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (guiaId: string) => marcarGuiaPaga(companyId, guiaId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.guiasImpostos(companyId) }),
   });
 }
 
