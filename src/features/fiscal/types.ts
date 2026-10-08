@@ -24,3 +24,30 @@ export interface ObrigacaoAcessoria {
   vencimento: string;
   status: string;
 }
+
+// ─── Comparativo de regimes tributários (painel do cliente) ──────────────────
+
+export type RegimeComparado = 'SIMPLES' | 'PRESUMIDO' | 'REAL';
+
+export interface ComparativoMes {
+  mes: number;
+  receita: number;
+  simples: number | null;
+  presumido: number;
+  real: number;
+  melhor: RegimeComparado | null;
+  /** false: o Simples vem da apuração calculada; true: estimado a partir dos lançamentos. */
+  estimado: boolean;
+}
+
+export interface ComparativoRegimes {
+  ano: number;
+  regimeAtual: string;
+  melhorNoAno: RegimeComparado | null;
+  economiaAnual: number;
+  receita: number;
+  totalSimples: number;
+  totalPresumido: number;
+  totalReal: number;
+  meses: ComparativoMes[];
+}

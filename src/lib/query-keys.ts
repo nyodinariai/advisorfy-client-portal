@@ -2,6 +2,7 @@ export const queryKeys = {
   activityDeadlines: () => ['activity-deadlines'] as const,
   das: (companyId: string, filters?: object) => ['das', companyId, filters] as const,
   apuracao: (companyId: string) => ['apuracao', companyId] as const,
+  comparativoRegimes: (companyId: string, ano: number) => ['comparativo-regimes', companyId, ano] as const,
   obrigacoes: (companyId: string) => ['obrigacoes', companyId] as const,
   nfeStagingHistory: (companyId: string) => ['nfe-staging', companyId] as const,
   notasEntrada: (companyId: string, filters?: object) => ['notas-entrada', companyId, filters] as const,

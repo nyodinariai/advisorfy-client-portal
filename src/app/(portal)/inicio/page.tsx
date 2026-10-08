@@ -17,6 +17,7 @@ import { useHolerites } from '@/features/payroll/queries';
 import { useActivityDeadlines } from '@/features/calendario/queries';
 import { useNfeStagingHistory } from '@/features/nfe/queries';
 import { DreMensalChart } from '@/features/accounting/DreMensalChart';
+import { ComparativoRegimesCard } from '@/features/fiscal/ComparativoRegimesCard';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Apuracao } from '@/features/fiscal/types';
 
@@ -408,6 +409,9 @@ export default function InicioDashboard() {
               href="/folha"
             />
           </div>
+
+          {/* Quanto a empresa pagaria de imposto em cada regime */}
+          <ComparativoRegimesCard companyId={companyId} />
 
           {/* Receita, custos, despesas e lucro mês a mês */}
           <DreMensalChart companyId={companyId} />
