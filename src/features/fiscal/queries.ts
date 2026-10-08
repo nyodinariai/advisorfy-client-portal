@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { fetchDas, fetchApuracao, fetchObrigacoes } from './api';
+import { fetchDas, fetchApuracao, fetchObrigacoes, fetchComparativoRegimes } from './api';
 
 export function useDas(companyId: string) {
   return useQuery({
@@ -22,6 +22,14 @@ export function useObrigacoes(companyId: string) {
   return useQuery({
     queryKey: queryKeys.obrigacoes(companyId),
     queryFn: () => fetchObrigacoes(companyId),
+    enabled: !!companyId,
+  });
+}
+
+export function useComparativoRegimes(companyId: string, ano: number) {
+  return useQuery({
+    queryKey: queryKeys.comparativoRegimes(companyId, ano),
+    queryFn: () => fetchComparativoRegimes(companyId, ano),
     enabled: !!companyId,
   });
 }
