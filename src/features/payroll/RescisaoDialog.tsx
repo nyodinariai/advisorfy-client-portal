@@ -121,10 +121,6 @@ export function RescisaoDialog({
                 <span>Aviso prévio</span>
                 <span className="font-medium">{formatCurrency(resultado.avisoPrevioValor)}</span>
               </div>
-              <div className="flex justify-between px-4 py-2">
-                <span>Multa FGTS</span>
-                <span className="font-medium">{formatCurrency(resultado.fgtsMulta)}</span>
-              </div>
               <div className="flex justify-between px-4 py-2 text-red-700 dark:text-red-400">
                 <span>INSS</span>
                 <span>-{formatCurrency(resultado.inssRescisao)}</span>
@@ -137,6 +133,29 @@ export function RescisaoDialog({
             <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 flex justify-between items-center">
               <span className="font-semibold">Total a Receber</span>
               <span className="text-xl font-bold">{formatCurrency(resultado.totalAReceber)}</span>
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm space-y-1">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">FGTS (previsão)</p>
+              <div className="flex justify-between">
+                <span>Saldo previsto da conta vinculada</span>
+                <span className="font-medium">{formatCurrency(resultado.fgtsSaldo)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Multa prevista (depositada na conta vinculada)</span>
+                <span className="font-medium">{formatCurrency(resultado.fgtsMulta)}</span>
+              </div>
+              <p className="pt-1 text-xs text-muted-foreground">
+                Isto é uma previsão, sem correção monetária nem juros, e a multa não entra no total a receber. Confirme o valor oficial no
+                extrato da Caixa antes de pagar.{' '}
+                <a
+                  className="underline underline-offset-4"
+                  href="https://fgtsdigital.sistema.gov.br/portal/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Consultar no FGTS Digital
+                </a>
+              </p>
             </div>
           </div>
         ) : (
