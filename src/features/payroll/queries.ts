@@ -9,6 +9,7 @@ import {
   fetchFuncionarios,
   fetchHolerites,
   fetchMinhasSolicitacoes,
+  fetchPainelFolha,
   salvarRascunho,
   solicitarAdmissao,
 } from './api';
@@ -107,5 +108,13 @@ export function useCriarRescisao(companyId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.employees(companyId) });
     },
+  });
+}
+
+export function usePainelFolha(companyId: string, ano: number, mes: number) {
+  return useQuery({
+    queryKey: ['painel-folha', companyId, ano, mes] as const,
+    queryFn: () => fetchPainelFolha(companyId, ano, mes),
+    enabled: !!companyId,
   });
 }
