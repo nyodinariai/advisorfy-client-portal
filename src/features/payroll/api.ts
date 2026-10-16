@@ -5,6 +5,7 @@ import type {
   Funcionario,
   FuncionarioDocumento,
   Holerite,
+  PainelFolha,
   RescisaoResponse,
 } from './types';
 
@@ -95,5 +96,10 @@ export async function criarRescisao(
     `/api/portal/companies/${companyId}/folha/rescisoes`,
     dto
   );
+  return data;
+}
+
+export async function fetchPainelFolha(companyId: string, ano: number, mes: number): Promise<PainelFolha> {
+  const { data } = await api.get<PainelFolha>(`/api/portal/companies/${companyId}/folha/painel`, { params: { ano, mes } });
   return data;
 }

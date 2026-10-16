@@ -19,6 +19,7 @@ import {
   useExcluirRascunho, useFuncionarios, useHolerites, useMinhasSolicitacoes,
 } from '@/features/payroll/queries';
 import { AdmitirFuncionarioDialog } from '@/features/payroll/AdmitirFuncionarioDialog';
+import { PainelFolha } from '@/features/payroll/PainelFolha';
 import { RescisaoDialog } from '@/features/payroll/RescisaoDialog';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Funcionario, Holerite, StatusAdmissao } from '@/features/payroll/types';
@@ -147,12 +148,18 @@ export default function FolhaPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Folha de Pagamento</h1>
 
-      <Tabs defaultValue="funcionarios">
+      <Tabs defaultValue="painel">
         <TabsList>
+          <TabsTrigger value="painel">Painel</TabsTrigger>
           <TabsTrigger value="funcionarios">Funcionários</TabsTrigger>
           <TabsTrigger value="solicitacoes">Minhas Solicitações</TabsTrigger>
           <TabsTrigger value="holerites">Holerites</TabsTrigger>
         </TabsList>
+
+        {/* Painel */}
+        <TabsContent value="painel" className="mt-4">
+          <PainelFolha companyId={companyId} />
+        </TabsContent>
 
         {/* Funcionários */}
         <TabsContent value="funcionarios" className="mt-4">

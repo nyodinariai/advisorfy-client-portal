@@ -207,3 +207,56 @@ export interface Holerite {
   salarioLiquido: number;
   linhas: HoleriteLinha[];
 }
+
+// ---------------------------------------------------------------------------
+// Painel da folha (espelha `PainelFolhaService`)
+// ---------------------------------------------------------------------------
+
+export interface PainelIndicadores {
+  colaboradores: number;
+  bruto: number;
+  liquido: number;
+  encargos: number;
+  beneficios: number;
+  custoTotal: number;
+  custoMesAnterior: number;
+  /** Variação do custo contra o mês anterior, em %; vazio quando o mês anterior não teve custo. */
+  variacaoDoCusto: number | null;
+}
+
+export interface PainelPontoMensal { ano: number; mes: number; bruto: number; liquido: number; custoTotal: number }
+
+export interface PainelFatia { rotulo: string; valor: number }
+
+export interface PainelGuia { tributo: string; descricao: string; valor: number; vencimento: string }
+
+export interface PainelPessoa { nome: string; detalhe: string; ate: string | null }
+
+export interface PainelAlertaFerias {
+  funcionarioId: string;
+  nome: string;
+  periodoInicio: string;
+  periodoFim: string;
+  concessivoFim: string;
+  situacao: 'EM_AQUISICAO' | 'DISPONIVEL' | 'VENCENDO' | 'VENCIDO' | 'QUITADO';
+  saldo: number;
+}
+
+export interface PainelFolha {
+  ano: number;
+  mes: number;
+  folhaFechada: boolean;
+  indicadores: PainelIndicadores;
+  evolucao: PainelPontoMensal[];
+  composicao: PainelFatia[];
+  guias: PainelGuia[];
+  feriasEAfastamentos: {
+    periodosVencidos: number;
+    periodosVencendo: number;
+    alertas: PainelAlertaFerias[];
+    emFerias: PainelPessoa[];
+    afastados: PainelPessoa[];
+  };
+  passivo: { ferias: number; decimoTerceiro: number; encargos: number; total: number };
+  quadro: { ativosNoInicioDoAno: number; admissoesNoAno: number; desligamentosNoAno: number; admissoesNoMes: number; desligamentosNoMes: number };
+}
