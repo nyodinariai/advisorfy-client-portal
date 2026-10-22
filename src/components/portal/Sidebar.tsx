@@ -15,6 +15,7 @@ import {
   Wallet,
   LifeBuoy,
   UserCog,
+  PackagePlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -30,6 +31,7 @@ const baseNavItems = [
   { href: '/demonstracoes', label: 'Demonstrações', icon: BarChart3 },
   { href: '/obrigacoes', label: 'Obrigações', icon: ClipboardList },
   { href: '/minha-empresa', label: 'Minha Empresa', icon: Building2 },
+  { href: '/servicos', label: 'Serviços', icon: PackagePlus },
   { href: '/suporte', label: 'Suporte', icon: LifeBuoy },
 ];
 
