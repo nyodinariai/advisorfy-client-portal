@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchCertificado } from '@/features/certificado/api';
 import { CertificadoCard } from '@/features/certificado/CertificadoCard';
 import { ProcuracaoCard } from '@/features/certificado/ProcuracaoCard';
+import { UsoDoCertificado } from '@/features/certificado/UsoDoCertificado';
 
 export default function CertificadoDigitalPage() {
   const certificado = useQuery({ queryKey: ['certificado'], queryFn: fetchCertificado });
@@ -22,7 +23,10 @@ export default function CertificadoDigitalPage() {
       {certificado.isLoading ? <Skeleton className="h-64 w-full rounded-xl" /> : certificado.isError || !certificado.data ? (
         <p className="text-sm text-destructive">Não foi possível carregar o certificado.</p>
       ) : (
-        <CertificadoCard situacao={certificado.data} />
+        <>
+          <CertificadoCard situacao={certificado.data} />
+          {certificado.data.certificado && <UsoDoCertificado resumo={certificado.data.resumo} />}
+        </>
       )}
 
       <ProcuracaoCard />
