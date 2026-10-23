@@ -5,6 +5,7 @@ import { ShieldCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchCertificado } from '@/features/certificado/api';
 import { CertificadoCard } from '@/features/certificado/CertificadoCard';
+import { ProcuracaoCard } from '@/features/certificado/ProcuracaoCard';
 
 export default function CertificadoDigitalPage() {
   const certificado = useQuery({ queryKey: ['certificado'], queryFn: fetchCertificado });
@@ -23,6 +24,8 @@ export default function CertificadoDigitalPage() {
       ) : (
         <CertificadoCard situacao={certificado.data} />
       )}
+
+      <ProcuracaoCard />
     </div>
   );
 }
