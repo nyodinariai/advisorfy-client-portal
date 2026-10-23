@@ -45,6 +45,10 @@ export interface AlteracaoContratual {
   createdAt: string;
   enviadaEm: string | null;
   concluidaEm: string | null;
+  /** O preço da contratação: não muda se o serviço for reajustado depois. */
+  valorTipo: 'FIXO' | 'FAIXA' | 'A_COMBINAR' | null;
+  valorMinimo: number | null;
+  valorMaximo: number | null;
   itens: ItemAlteracao[];
 }
 

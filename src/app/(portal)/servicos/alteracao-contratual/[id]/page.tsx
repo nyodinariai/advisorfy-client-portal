@@ -75,6 +75,10 @@ export default function AlteracaoContratualPage() {
   const p = pedido.data;
   if (pedido.isError || tiposQuery.isError || !p) return <p className="text-sm text-destructive">Não foi possível carregar o pedido.</p>;
 
+  const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const valorContratado = p.valorTipo === 'FIXO' && p.valorMinimo != null ? brl(p.valorMinimo)
+    : p.valorTipo === 'FAIXA' && p.valorMinimo != null && p.valorMaximo != null ? `${brl(p.valorMinimo)} a ${brl(p.valorMaximo)}`
+    : p.valorTipo === 'A_COMBINAR' ? 'A combinar' : null;
   const editavel = p.editavelPeloCliente && podeEditar;
   const podeCancelar = podeEditar && (p.status === 'RASCUNHO' || p.status === 'ENVIADA');
 
@@ -86,6 +90,7 @@ export default function AlteracaoContratualPage() {
         <div>
           <h1 className="text-xl font-semibold">Alteração contratual</h1>
           <p className="font-mono text-xs text-muted-foreground">{p.protocolo}</p>
+          {valorContratado && <p className="mt-1 text-sm">Valor contratado: <strong>{valorContratado}</strong>{' '}<span className="text-xs text-muted-foreground">(taxas dos órgãos públicos à parte)</span></p>}
         </div>
         <Badge variant="outline" className={STATUS_ALTERACAO_COLORS[p.status]}>{p.statusRotulo}</Badge>
       </div>
