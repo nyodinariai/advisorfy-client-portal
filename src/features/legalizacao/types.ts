@@ -487,6 +487,8 @@ export const DOCUMENTO_TIPO_LABEL_CLIENTE: Record<string, string> = {
   PROCURACAO_ECAC: 'Procuracao Eletronica e-CAC',
   DISTRATO_CONTADOR_ANTERIOR: 'Distrato com Contador Anterior',
   DAS_ULTIMOS_12_MESES: 'DAS dos Ultimos 12 Meses',
+  RECEITA_MENSAL_ULTIMOS_12_MESES: 'Receita mensal dos Ultimos 12 Meses',
+  FOLHA_ULTIMOS_12_MESES: 'Folha de Pagamento dos Ultimos 12 Meses',
   DEFIS_DECLARACAO_ANUAL: 'DEFIS — Declaracao Anual',
   DASN_MEI: 'DASN-MEI',
   GUIAS_ISS_ICMS: 'Guias de ISS/ICMS',
