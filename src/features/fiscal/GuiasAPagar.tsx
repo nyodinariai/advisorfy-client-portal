@@ -67,6 +67,11 @@ function AcoesGuia({ companyId, guia }: { companyId: string; guia: GuiaCliente }
           <Download className="mr-2 h-3.5 w-3.5" />Baixar guia
         </a>
       )}
+      {guia.extratoUrl && (
+        <a href={guia.extratoUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+          <Download className="mr-2 h-3.5 w-3.5" />Ver extrato do imposto
+        </a>
+      )}
       <input
         ref={inputRef}
         type="file"
