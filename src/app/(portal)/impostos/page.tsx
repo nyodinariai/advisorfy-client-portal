@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useDas, useApuracao, useObrigacoes } from '@/features/fiscal/queries';
 import { GuiasAPagar } from '@/features/fiscal/GuiasAPagar';
+import { ExtratoDoImposto } from '@/features/fiscal/ExtratoDoImposto';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Das } from '@/features/fiscal/types';
 
@@ -134,6 +135,7 @@ export default function ImpostosPage() {
         <TabsList>
           <TabsTrigger value="guias">Guias a pagar</TabsTrigger>
           <TabsTrigger value="das">DAS — Simples Nacional</TabsTrigger>
+          <TabsTrigger value="extrato">Extrato do imposto</TabsTrigger>
           <TabsTrigger value="apuracao">Apuração</TabsTrigger>
           <TabsTrigger value="obrigacoes">Obrigações Acessórias</TabsTrigger>
         </TabsList>
@@ -144,6 +146,10 @@ export default function ImpostosPage() {
         </TabsContent>
 
         {/* DAS */}
+        <TabsContent value="extrato" className="mt-4">
+          <ExtratoDoImposto companyId={companyId} />
+        </TabsContent>
+
         <TabsContent value="das" className="mt-4">
           {dasError && (
             <Alert variant="destructive" className="mb-4">

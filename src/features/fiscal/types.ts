@@ -77,3 +77,17 @@ export interface ComparativoRegimes {
   totalReal: number;
   meses: ComparativoMes[];
 }
+
+/** O extrato do cálculo do DAS na visão do cliente: o imposto do mês dividido entre as notas, em linguagem simples. */
+export interface ExtratoDoImposto {
+  ano: number;
+  mes: number;
+  disponivel: boolean;
+  motivoIndisponivel: string | null;
+  receitaBruta: number;
+  valorAPagar: number;
+  economiaEstimada: number;
+  grupos: { descricao: string; explicacoes: string[]; receita: number; imposto: number; aPagar: number; notas: number }[];
+  notas: { numero: string; descricao: string; valor: number; tratamento: string; imposto: number; aPagar: number }[];
+  explicacao: string;
+}

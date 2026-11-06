@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { Das, Apuracao, ObrigacaoAcessoria, GuiaCliente, ComparativoRegimes } from './types';
+import type { Das, Apuracao, ObrigacaoAcessoria, GuiaCliente, ComparativoRegimes, ExtratoDoImposto } from './types';
 
 export async function fetchDas(companyId: string): Promise<Das[]> {
   const { data } = await api.get<Das[]>(`/api/erp/companies/${companyId}/fiscal/simples/das`);
@@ -47,4 +47,22 @@ export async function fetchComparativoRegimes(companyId: string, ano: number): P
     { params: { ano } }
   );
   return data;
+}
+
+const extratoUrl = (companyId: string, ano: number, mes: number) => `/api/portal/companies/${companyId}/fiscal/simples/extrato/${ano}/${mes}`;
+
+export async function fetchExtratoDoImposto(companyId: string, ano: number, mes: number): Promise<ExtratoDoImposto> {
+  const { data } = await api.get<ExtratoDoImposto>(extratoUrl(companyId, ano, mes));
+  return data;
+}
+
+/** Baixa o PDF do extrato na versão do cliente. */
+export async function baixarExtratoPdf(companyId: string, ano: number, mes: number): Promise<void> {
+  const { data } = await api.get<Blob>(`${extratoUrl(companyId, ano, mes)}/pdf`, { responseType: 'blob' });
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `extrato-do-imposto-${ano}-${String(mes).padStart(2, '0')}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
