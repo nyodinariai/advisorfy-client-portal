@@ -44,6 +44,9 @@ export interface GuiaCliente {
   valorAtualApuracao: number | null;
   arquivoNome: string;
   arquivoUrl: string | null;
+  /** O extrato do imposto do mês, que segue junto da guia do DAS. */
+  extratoNome?: string | null;
+  extratoUrl?: string | null;
   comprovanteNome: string | null;
   comprovanteUrl: string | null;
   pagoEm: string | null;
