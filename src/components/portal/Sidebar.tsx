@@ -17,6 +17,7 @@ import {
   UserCog,
   PackagePlus,
   ShieldCheck,
+  Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -27,6 +28,7 @@ const baseNavItems = [
   { href: '/calendario', label: 'Calendário', icon: CalendarDays },
   { href: '/documentos', label: 'Documentos', icon: FileText },
   { href: '/impostos', label: 'Impostos & Guias', icon: Receipt },
+  { href: '/conferencia', label: 'Conferência', icon: Scale },
   { href: '/mensalidades', label: 'Mensalidades', icon: Wallet },
   { href: '/folha', label: 'Folha de Pagamento', icon: Users },
   { href: '/demonstracoes', label: 'Demonstrações', icon: BarChart3 },

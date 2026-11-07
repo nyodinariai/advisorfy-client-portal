@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/calendario': 'Calendário',
   '/documentos': 'Documentos',
   '/impostos': 'Impostos & Guias',
+  '/conferencia': 'Conferência',
   '/folha': 'Folha de Pagamento',
   '/demonstracoes': 'Demonstrações',
   '/obrigacoes': 'Obrigações',
