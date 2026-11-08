@@ -1,13 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { queryKeys } from '@/lib/query-keys';
+import { uploadNfeStagingEmLotes } from '../nfe/api';
+import type { StagingResult } from '../nfe/types';
 import { fetchConferencia, fetchConferencias, responderPonto, type Conferencia, type PontoDaConferencia } from './api';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -90,7 +93,7 @@ function Detalhe({ companyId, base, onVoltar }: { companyId: string; base: Confe
             {pontos.length === 0 ? <b>Não há nada pendente para você.</b> : <><b>{pontos.length - c.respondidos} de {pontos.length}</b> ponto{pontos.length > 1 ? 's' : ''} aguardando resposta.</>}
           </p>
           {responder.isError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Não foi possível enviar a resposta. Tente de novo.</AlertDescription></Alert>}
-          {pontos.map((p) => <Ponto key={p.chave} ponto={p} enviando={responder.isPending} onEnviar={(opcao, comentario) => responder.mutate({ chave: p.chave, opcao, comentario })} />)}
+          {pontos.map((p) => <Ponto key={p.chave} companyId={companyId} ponto={p} enviando={responder.isPending} onEnviar={(opcao, comentario) => responder.mutate({ chave: p.chave, opcao, comentario })} />)}
           {avisos.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Só para você saber</CardTitle><CardDescription>Estas notas têm só uma diferença de data dentro do mesmo mês. Vale a data da nota fiscal e não precisa responder.</CardDescription></CardHeader>
@@ -103,7 +106,50 @@ function Detalhe({ companyId, base, onVoltar }: { companyId: string; base: Confe
   );
 }
 
-function Ponto({ ponto, enviando, onEnviar }: { ponto: PontoDaConferencia; enviando: boolean; onEnviar: (opcao: string, comentario: string) => void }) {
+/**
+ * Anexo do XML da nota que o cliente disse que vai enviar. O arquivo entra pela mesma fila de importação do módulo de notas fiscais (como rascunho, origem portal), e o
+ * escritório confere antes de lançar.
+ */
+function EnvioDeXml({ companyId }: { companyId: string }) {
+  const queryClient = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const [resultado, setResultado] = useState<StagingResult | null>(null);
+  const enviar = useMutation({
+    mutationFn: (files: File[]) => uploadNfeStagingEmLotes(companyId, files),
+    onSuccess: (res) => {
+      setResultado(res);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.nfeStagingHistory(companyId) });
+    },
+  });
+  const erros = resultado?.arquivos.filter((a) => a.status === 'ERRO') ?? [];
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed px-3 py-3">
+      <p className="text-sm">Anexe aqui o XML da nota fiscal (pode escolher vários arquivos).</p>
+      <input
+        ref={input} type="file" accept=".xml,text/xml,application/xml" multiple className="hidden"
+        onChange={(ev) => {
+          const files = Array.from(ev.target.files ?? []);
+          if (files.length > 0) enviar.mutate(files);
+          ev.target.value = '';
+        }}
+      />
+      <Button type="button" variant="outline" size="sm" disabled={enviar.isPending} onClick={() => input.current?.click()}>
+        {enviar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Anexar XML
+      </Button>
+      {enviar.isError && <p className="text-sm text-destructive">Não foi possível enviar o arquivo. Tente de novo.</p>}
+      {resultado && (
+        <div className="space-y-1 text-sm">
+          {resultado.recebidas > 0 && <p className="text-emerald-700 dark:text-emerald-400">{resultado.recebidas} nota{resultado.recebidas > 1 ? 's' : ''} recebida{resultado.recebidas > 1 ? 's' : ''}. O escritório vai conferir e lançar.</p>}
+          {resultado.duplicadas > 0 && <p className="text-muted-foreground">{resultado.duplicadas} já tinha{resultado.duplicadas > 1 ? 'm' : ''} sido enviada{resultado.duplicadas > 1 ? 's' : ''} antes.</p>}
+          {erros.map((a) => <p key={a.nome} className="text-destructive">{a.nome}: {a.mensagemErro ?? 'não foi possível ler o arquivo.'}</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Ponto({ companyId, ponto, enviando, onEnviar }: { companyId: string; ponto: PontoDaConferencia; enviando: boolean; onEnviar: (opcao: string, comentario: string) => void }) {
   const [editando, setEditando] = useState(false);
   const [opcao, setOpcao] = useState(ponto.resposta?.opcao ?? '');
   const [comentario, setComentario] = useState(ponto.resposta?.comentario ?? '');
@@ -136,6 +182,7 @@ function Ponto({ ponto, enviando, onEnviar }: { ponto: PontoDaConferencia; envia
               Você respondeu: {ponto.resposta!.rotuloOpcao}
               {ponto.resposta!.comentario && <span className="block text-muted-foreground">“{ponto.resposta!.comentario}”</span>}
             </p>
+            {ponto.resposta!.opcao === 'ENVIO' && <EnvioDeXml companyId={companyId} />}
             <Button variant="outline" size="sm" onClick={() => setEditando(true)}>Alterar resposta</Button>
           </div>
         ) : (
@@ -149,6 +196,7 @@ function Ponto({ ponto, enviando, onEnviar }: { ponto: PontoDaConferencia; envia
                 </label>
               ))}
             </fieldset>
+            {opcao === 'ENVIO' && <EnvioDeXml companyId={companyId} />}
             <div className="space-y-1">
               <label htmlFor={`c-${ponto.chave}`} className="text-xs text-muted-foreground">Comentário (opcional)</label>
               <textarea
