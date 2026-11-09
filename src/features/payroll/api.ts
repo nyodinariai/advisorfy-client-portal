@@ -5,6 +5,7 @@ import type {
   Funcionario,
   FuncionarioDocumento,
   Holerite,
+  UnidadeDeLotacao,
   PainelFolha,
   RescisaoResponse,
 } from './types';
@@ -13,6 +14,11 @@ export async function fetchFuncionarios(companyId: string): Promise<Funcionario[
   const { data } = await api.get<Funcionario[]>(
     `/api/portal/companies/${companyId}/folha/funcionarios`
   );
+  return data;
+}
+
+export async function fetchUnidadesDeLotacao(companyId: string): Promise<UnidadeDeLotacao[]> {
+  const { data } = await api.get<UnidadeDeLotacao[]>(`/api/portal/companies/${companyId}/folha/unidades`);
   return data;
 }
 

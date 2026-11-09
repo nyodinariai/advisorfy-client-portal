@@ -24,8 +24,9 @@ import {
   useFuncionarioDocumentos,
   useSalvarRascunho,
   useSolicitarAdmissao,
+  useUnidadesDeLotacao,
 } from './queries';
-import type { CriarFuncionarioDTO, Funcionario, FuncionarioDocumento } from './types';
+import type { CriarFuncionarioDTO, Funcionario, FuncionarioDocumento, UnidadeDeLotacao } from './types';
 
 const DOCUMENTO_LABEL: Record<string, string> = {
   RG_OU_CNH: 'RG ou CNH',
@@ -106,6 +107,13 @@ function DocumentoChecklistItem({
       </div>
     </div>
   );
+}
+
+const sufixoCnpj = (cnpj: string) => `${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
+
+function rotuloDaUnidade(u: UnidadeDeLotacao | undefined) {
+  if (!u) return 'Matriz';
+  return `${u.matriz ? 'Matriz' : 'Filial'} ${sufixoCnpj(u.cnpj)}${u.nomeFantasia ? ` · ${u.nomeFantasia}` : ''}`;
 }
 
 function DocumentosTab({ companyId, funcionarioId }: { companyId: string; funcionarioId: string | null }) {
@@ -198,6 +206,7 @@ const admissaoSchema = z.object({
   cargo: z.string().optional(),
   cbo: z.string().optional(),
   departamento: z.string().optional(),
+  estabelecimentoCnpj: z.string().optional(),
   horasSemanais: z.string().optional(),
 
   // Dados bancários
@@ -260,6 +269,7 @@ function funcionarioParaForm(f: Funcionario): AdmissaoForm {
     cargo: f.cargo ?? undefined,
     cbo: f.cbo ?? undefined,
     departamento: f.departamento ?? undefined,
+    estabelecimentoCnpj: f.estabelecimentoCnpj ?? undefined,
     horasSemanais: f.horasSemanais ? String(f.horasSemanais) : undefined,
     banco: f.banco ?? undefined,
     agencia: f.agencia ?? undefined,
@@ -290,6 +300,7 @@ export function AdmitirFuncionarioDialog({
   } = useForm<AdmissaoForm>({ resolver: zodResolver(admissaoSchema) as never, defaultValues });
 
   const [savedId, setSavedId] = useState<string | null>(funcionario?.id ?? null);
+  const { data: unidades } = useUnidadesDeLotacao(companyId);
   const salvarRascunho = useSalvarRascunho(companyId);
   const atualizarRascunho = useAtualizarRascunho(companyId);
   const solicitarAdmissao = useSolicitarAdmissao(companyId);
@@ -315,6 +326,7 @@ export function AdmitirFuncionarioDialog({
       numDependentes: Number(values.numDependentes || 0),
       cargo: values.cargo || undefined,
       departamento: values.departamento || undefined,
+      estabelecimentoCnpj: values.estabelecimentoCnpj || undefined,
       cbo: values.cbo || undefined,
       horasSemanais: values.horasSemanais ? Number(values.horasSemanais) : undefined,
       categoriaEsocial: values.categoriaEsocial,
@@ -669,6 +681,23 @@ export function AdmitirFuncionarioDialog({
                   <Label htmlFor="departamento">Departamento</Label>
                   <Input id="departamento" {...register('departamento')} />
                 </div>
+                {unidades && unidades.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="estabelecimentoCnpj">Lotação (unidade)</Label>
+                    <Select
+                      value={values.estabelecimentoCnpj || unidades[0].cnpj}
+                      onValueChange={(v) => setValue('estabelecimentoCnpj', !v || v === unidades[0].cnpj ? '' : v)}
+                    >
+                      <SelectTrigger id="estabelecimentoCnpj" className="w-full">
+                        <SelectValue>{rotuloDaUnidade(unidades.find((u) => u.cnpj === (values.estabelecimentoCnpj || unidades[0].cnpj)))}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {unidades.map((u) => <SelectItem key={u.cnpj} value={u.cnpj}>{rotuloDaUnidade(u)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">A folha é contabilizada por unidade, conforme a lotação.</p>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label htmlFor="horasSemanais">Horas semanais</Label>
                   <Input id="horasSemanais" type="number" {...register('horasSemanais')} />

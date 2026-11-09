@@ -38,6 +38,8 @@ export interface Funcionario {
 
   cargo: string | null;
   departamento: string | null;
+  /** CNPJ completo da unidade de lotação (matriz ou filial); nulo vale a matriz. */
+  estabelecimentoCnpj: string | null;
   salarioBase: number;
   numDependentes: number;
   cbo: string | null;
@@ -106,6 +108,7 @@ export interface CriarFuncionarioDTO {
 
   cargo?: string;
   departamento?: string;
+  estabelecimentoCnpj?: string;
   salarioBase: number;
   numDependentes: number;
   cbo?: string;
@@ -259,4 +262,11 @@ export interface PainelFolha {
   };
   passivo: { ferias: number; decimoTerceiro: number; encargos: number; total: number };
   quadro: { ativosNoInicioDoAno: number; admissoesNoAno: number; desligamentosNoAno: number; admissoesNoMes: number; desligamentosNoMes: number };
+}
+
+/** Uma unidade onde o colaborador pode ser lotado; a matriz vem primeiro. A lista vem vazia quando a empresa só tem a matriz. */
+export interface UnidadeDeLotacao {
+  cnpj: string;
+  matriz: boolean;
+  nomeFantasia: string | null;
 }

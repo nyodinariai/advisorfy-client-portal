@@ -10,10 +10,19 @@ import {
   fetchHolerites,
   fetchMinhasSolicitacoes,
   fetchPainelFolha,
+  fetchUnidadesDeLotacao,
   salvarRascunho,
   solicitarAdmissao,
 } from './api';
 import type { CriarFuncionarioDTO, CriarRescisaoDTO } from './types';
+
+export function useUnidadesDeLotacao(companyId: string) {
+  return useQuery({
+    queryKey: ['folha-unidades', companyId],
+    queryFn: () => fetchUnidadesDeLotacao(companyId),
+    enabled: !!companyId,
+  });
+}
 
 export function useFuncionarios(companyId: string) {
   return useQuery({
