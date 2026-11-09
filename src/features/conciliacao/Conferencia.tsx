@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Loader2, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/query-keys';
 import { uploadNfeStagingEmLotes } from '../nfe/api';
 import type { StagingResult } from '../nfe/types';
-import { fetchConferencia, fetchConferencias, responderPonto, type Conferencia, type PontoDaConferencia } from './api';
+import { baixarModeloDeEstoque, enviarPlanilhaDeEstoque, fetchConferencia, fetchConferencias, responderPonto, type Conferencia, type PontoDaConferencia } from './api';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
@@ -32,15 +32,19 @@ export function Conferencia({ companyId }: { companyId: string }) {
   const conferencias = lista.data ?? [];
   if (conferencias.length === 0) {
     return (
+      <div className="space-y-4">
+      <PlanilhaDeEstoque companyId={companyId} />
       <Card>
         <CardHeader><CardTitle className="text-base">Nada para conferir por enquanto</CardTitle><CardDescription>Quando o escritório comparar suas planilhas com as notas fiscais e encontrar diferenças, elas aparecem aqui para você analisar.</CardDescription></CardHeader>
       </Card>
+      </div>
     );
   }
   if (aberta) return <Detalhe companyId={companyId} base={aberta} onVoltar={() => setAberta(null)} />;
 
   return (
     <div className="space-y-3">
+      <PlanilhaDeEstoque companyId={companyId} />
       {conferencias.map((c) => {
         const pendentes = c.total - c.respondidos;
         return (
@@ -56,6 +60,78 @@ export function Conferencia({ companyId }: { companyId: string }) {
         );
       })}
     </div>
+  );
+}
+
+const nomeDoMes = (ano: number, mes: number) => `${MESES[mes - 1]} de ${ano}`;
+
+/** O mês anterior ao de hoje: é o que o cliente costuma conferir. */
+function mesAnterior(): { ano: number; mes: number } {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return { ano: d.getFullYear(), mes: d.getMonth() + 1 };
+}
+
+/**
+ * O cliente baixa o modelo da planilha de estoque, preenche com as entradas e saídas do mês e envia por aqui. A contabilidade compara com as notas fiscais importadas e as
+ * diferenças já aparecem nesta página, para ele responder.
+ */
+function PlanilhaDeEstoque({ companyId }: { companyId: string }) {
+  const queryClient = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const inicial = mesAnterior();
+  const [ano, setAno] = useState(inicial.ano);
+  const [mes, setMes] = useState(inicial.mes);
+  const [resultado, setResultado] = useState<Conferencia | null>(null);
+  const baixar = useMutation({ mutationFn: () => baixarModeloDeEstoque(companyId) });
+  const enviar = useMutation({
+    mutationFn: (arquivo: File) => enviarPlanilhaDeEstoque(companyId, ano, mes, arquivo),
+    onSuccess: (c) => {
+      setResultado(c);
+      void queryClient.invalidateQueries({ queryKey: ['conferencias', companyId] });
+    },
+  });
+  const mensagemDeErro = (enviar.error as { response?: { data?: { message?: string } } } | null)?.response?.data?.message;
+  const opcoesDeMes = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Planilha de estoque</CardTitle>
+        <CardDescription>Baixe o modelo, preencha uma linha por entrada ou saída do mês (com o número da nota e o código do item) e envie. A contabilidade compara com as notas fiscais e mostra aqui o que não bate.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="estoque-mes" className="text-sm text-muted-foreground">Mês da planilha</label>
+          <select id="estoque-mes" className="h-9 rounded-md border bg-background px-2 text-sm" value={mes} onChange={(ev) => setMes(Number(ev.target.value))}>
+            {opcoesDeMes.map((m) => <option key={m} value={m}>{MESES[m - 1]}</option>)}
+          </select>
+          <label htmlFor="estoque-ano" className="sr-only">Ano</label>
+          <select id="estoque-ano" className="h-9 rounded-md border bg-background px-2 text-sm" value={ano} onChange={(ev) => setAno(Number(ev.target.value))}>
+            {[inicial.ano - 1, inicial.ano, inicial.ano + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <Button type="button" variant="outline" size="sm" disabled={baixar.isPending} onClick={() => baixar.mutate()}>
+            {baixar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Baixar modelo
+          </Button>
+          <input
+            ref={input} type="file" accept=".xlsx" className="hidden"
+            onChange={(ev) => { const f = ev.target.files?.[0]; if (f) enviar.mutate(f); ev.target.value = ''; }}
+          />
+          <Button type="button" size="sm" disabled={enviar.isPending} onClick={() => input.current?.click()}>
+            {enviar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Enviar planilha de {nomeDoMes(ano, mes)}
+          </Button>
+        </div>
+        {baixar.isError && <p className="text-sm text-destructive">Não foi possível baixar o modelo agora. Tente de novo.</p>}
+        {enviar.isError && <p className="text-sm text-destructive">{mensagemDeErro ?? 'Não foi possível enviar a planilha. Confira se é o modelo em .xlsx e tente de novo.'}</p>}
+        {resultado && !enviar.isError && (
+          <p className="text-sm text-emerald-700 dark:text-emerald-400">
+            Planilha de {nomeDoMes(resultado.ano, resultado.mes)} recebida.{' '}
+            {resultado.total === 0 ? 'Não há diferenças com as notas fiscais.' : `${resultado.total} ponto${resultado.total > 1 ? 's' : ''} para você analisar abaixo.`}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
