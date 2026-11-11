@@ -139,7 +139,7 @@ function Dropzone({ files, onChange, conferencia, conferindo }: DropzoneProps) {
         <div className="space-y-2">
           {files.map((file, idx) => (
             <div key={idx} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-              conferencia(file)?.status === 'ERRO' ? 'border-red-300 bg-red-50/50' : conferencia(file)?.status === 'DUPLICADA' ? 'border-amber-300 bg-amber-50/50' : 'bg-muted/30'
+              conferencia(file)?.status === 'ERRO' ? 'border-red-300 bg-red-50/50' : conferencia(file)?.status === 'DUPLICADA' ? 'border-amber-300 bg-amber-50/50' : conferencia(file)?.status === 'CANCELAMENTO' ? 'border-blue-300 bg-blue-50/50' : 'bg-muted/30'
             }`}>
               <FileText className="size-4 shrink-0 text-muted-foreground" />
               <div className="flex-1 min-w-0">
@@ -172,6 +172,12 @@ function ConferenciaDoArquivo({ file, v, conferindo }: { file: File; v: Verifica
   if (v.status === 'DUPLICADA') {
     return <p className="text-xs text-amber-700">{v.mensagem} Não será enviado de novo.</p>;
   }
+  if (v.status === 'CANCELAMENTO') {
+    return <p className="text-xs text-blue-700">Evento de cancelamento · {v.mensagem}</p>;
+  }
+  if (v.status === 'IGNORADO') {
+    return <p className="text-xs text-muted-foreground">{v.mensagem}</p>;
+  }
   const detalhe = [v.tipoNf ? TIPO_NF_LABELS[v.tipoNf] : null, v.numero ? `NF ${v.numero}${v.serie ? `/${v.serie}` : ''}` : null, v.valorTotal != null ? formatCurrency(v.valorTotal) : null]
     .filter(Boolean).join(' · ');
   return (
@@ -202,14 +208,23 @@ function UploadProgressBar({ progress }: { progress: NfeUploadProgress }) {
   );
 }
 
+const STATUS_DO_ARQUIVO: Record<StagingFile['status'], string> = {
+  AGUARDANDO: 'Recebida',
+  DUPLICADA: 'Duplicada',
+  ERRO: 'Erro',
+  CANCELAMENTO: 'Cancelamento aplicado',
+  CANCELAMENTO_PENDENTE: 'Cancelamento pendente',
+  IGNORADO: 'Ignorado',
+};
+
 function UploadResult({ files }: { files: StagingFile[] }) {
   return (
     <div className="space-y-2">
       {files.map((f, idx) => (
         <div key={idx} className="flex items-center gap-3 rounded-lg border px-3 py-2">
-          {f.status === 'AGUARDANDO' ? (
+          {f.status === 'AGUARDANDO' || f.status === 'CANCELAMENTO' ? (
             <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-          ) : f.status === 'DUPLICADA' ? (
+          ) : f.status === 'DUPLICADA' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO' ? (
             <AlertCircle className="size-4 text-amber-600 shrink-0" />
           ) : (
             <AlertCircle className="size-4 text-red-600 shrink-0" />
@@ -218,6 +233,8 @@ function UploadResult({ files }: { files: StagingFile[] }) {
             <p className="truncate text-sm">{f.nome}</p>
             {f.status === 'ERRO' ? (
               <p className="text-xs text-red-600 truncate">{f.mensagemErro}</p>
+            ) : f.status === 'CANCELAMENTO' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO' ? (
+              <p className="text-xs text-muted-foreground">{f.mensagemErro}</p>
             ) : (
               <p className="font-mono text-xs text-muted-foreground truncate">{f.chaveAcesso}</p>
             )}
@@ -225,14 +242,14 @@ function UploadResult({ files }: { files: StagingFile[] }) {
           <Badge
             variant="outline"
             className={
-              f.status === 'AGUARDANDO'
+              f.status === 'AGUARDANDO' || f.status === 'CANCELAMENTO'
                 ? 'text-emerald-700 border-emerald-300'
-                : f.status === 'DUPLICADA'
+                : f.status === 'DUPLICADA' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO'
                 ? 'text-amber-700 border-amber-300'
                 : 'text-red-700 border-red-300'
             }
           >
-            {f.status === 'AGUARDANDO' ? 'Recebida' : f.status === 'DUPLICADA' ? 'Duplicada' : 'Erro'}
+            {STATUS_DO_ARQUIVO[f.status]}
           </Badge>
         </div>
       ))}
@@ -433,7 +450,7 @@ export default function DocumentosPage() {
   const [result, setResult] = useState<StagingFile[] | null>(null);
   const conferencia = useConferenciaDeXml(companyId, files);
   // Vai para o envio o que a conferência liberou (ou o que ainda não foi conferido): erro e nota repetida ficam de fora, com o motivo na lista.
-  const enviaveis = files.filter((f) => { const v = conferencia.de(f); return !v || v.status === 'OK'; });
+  const enviaveis = files.filter((f) => { const v = conferencia.de(f); return !v || v.status === 'OK' || v.status === 'CANCELAMENTO'; });
   const naoEnviaveis = files.length - enviaveis.length;
 
   const [nfSubTab, setNfSubTab] = useState<'entrada' | 'saida'>('entrada');
@@ -476,8 +493,10 @@ export default function DocumentosPage() {
       setResult(res.arquivos);
       setFiles([]);
       const erros = res.arquivos.filter((f) => f.status === 'ERRO').length;
+      const cancelamentos = res.arquivos.filter((f) => f.status === 'CANCELAMENTO' || f.status === 'CANCELAMENTO_PENDENTE').length;
       toast.success(
         `${res.recebidas} arquivo(s) recebido(s)`
+        + `${cancelamentos > 0 ? `, ${cancelamentos} cancelamento(s) de nota` : ''}`
         + `${res.duplicadas > 0 ? `, ${res.duplicadas} duplicado(s)` : ''}`
         + `${erros > 0 ? `, ${erros} com erro` : ''}.`
       );

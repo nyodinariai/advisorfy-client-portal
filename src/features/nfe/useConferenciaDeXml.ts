@@ -38,6 +38,9 @@ export function useConferenciaDeXml(companyId: string, files: File[]) {
           const leitura = lerXmlLocal(await f.text());
           if (leitura.erro) {
             local[k] = verificacaoLocal(f.name, 'ERRO', leitura.erro, null);
+          } else if (leitura.evento) {
+            // Um evento traz a chave da nota a que se refere: não é repetição da nota, e quem diz o que ele faz é o servidor.
+            paraOServidor.push(f);
           } else if (leitura.chaveAcesso && chavesVistas.current.has(leitura.chaveAcesso)) {
             local[k] = verificacaoLocal(f.name, 'DUPLICADA',
               `Esta nota aparece mais de uma vez no envio (mesma chave do arquivo ${chavesVistas.current.get(leitura.chaveAcesso)}).`, leitura.chaveAcesso);
