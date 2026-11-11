@@ -1,4 +1,5 @@
-export type StagingStatus = 'AGUARDANDO' | 'DUPLICADA' | 'ERRO';
+/** AGUARDANDO/DUPLICADA/ERRO são de notas. CANCELAMENTO, CANCELAMENTO_PENDENTE e IGNORADO são de XML de evento da Sefaz: o cancelamento foi aplicado, ficou pendente de ajuste do contador, ou o evento não altera a nota. */
+export type StagingStatus = 'AGUARDANDO' | 'DUPLICADA' | 'ERRO' | 'CANCELAMENTO' | 'CANCELAMENTO_PENDENTE' | 'IGNORADO';
 
 export interface StagingFile {
   nome: string;
@@ -14,12 +15,12 @@ export interface StagingResult {
 }
 
 /** A conferência de um XML antes do envio. OK: será recebido. DUPLICADA: já foi enviado antes ou repete outro arquivo do envio. ERRO: não dá para importar. */
-export type VerificacaoStatus = 'OK' | 'DUPLICADA' | 'ERRO';
+export type VerificacaoStatus = 'OK' | 'DUPLICADA' | 'ERRO' | 'CANCELAMENTO' | 'IGNORADO';
 
 export interface VerificacaoArquivo {
   nome: string;
   status: VerificacaoStatus;
-  /** Por que o arquivo não vai ser recebido (DUPLICADA ou ERRO). */
+  /** Por que o arquivo não vai ser recebido (DUPLICADA ou ERRO), ou o que o evento fará (CANCELAMENTO, IGNORADO). */
   mensagem: string | null;
   chaveAcesso: string | null;
   numero: string | null;

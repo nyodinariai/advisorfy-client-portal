@@ -15,11 +15,13 @@ export interface LeituraLocal {
   erro: string | null;
   /** A chave de acesso (44 dígitos) da NF-e, quando o arquivo traz uma. */
   chaveAcesso: string | null;
+  /** O arquivo é o XML de um evento da NF-e (cancelamento, carta de correção...): quem decide o que ele faz é o servidor. */
+  evento?: boolean;
 }
 
 /**
- * A primeira conferência, feita aqui no navegador e sem rede: o arquivo é um XML bem formado e traz uma NF-e? Evento da nota (cancelamento, carta de correção) e arquivo que não é
- * XML são os erros mais comuns de quem junta os arquivos de uma pasta; dizer isso antes do envio poupa a ida ao servidor.
+ * A primeira conferência, feita aqui no navegador e sem rede: o arquivo é um XML bem formado e traz uma NF-e ou um evento dela? Arquivo que não é XML é o erro mais comum de quem
+ * junta os arquivos de uma pasta; dizer isso antes do envio poupa a ida ao servidor. O XML de evento segue para o servidor: o cancelamento feito na Sefaz precisa chegar ao sistema.
  */
 export function lerXmlLocal(texto: string): LeituraLocal {
   let doc: Document;
@@ -33,7 +35,8 @@ export function lerXmlLocal(texto: string): LeituraLocal {
   }
   const raiz = doc.documentElement?.localName ?? '';
   if (raiz === 'procEventoNFe' || raiz === 'envEvento' || raiz === 'evento') {
-    return { erro: 'Este arquivo é um evento da NF-e (cancelamento, carta de correção ou manifestação), não a nota. Envie o XML da nota fiscal.', chaveAcesso: null };
+    const chaveEvento = doc.getElementsByTagName('chNFe')[0]?.textContent?.trim() ?? '';
+    return { erro: null, chaveAcesso: /^\d{44}$/.test(chaveEvento) ? chaveEvento : null, evento: true };
   }
   const inf = doc.getElementsByTagName('infNFe')[0];
   if (!inf) {
