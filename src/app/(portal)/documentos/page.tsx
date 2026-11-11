@@ -23,10 +23,11 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useNfeStagingHistory, useNotasEntrada, useNotasSaida } from '@/features/nfe/queries';
 import { uploadNfeStagingEmLotes } from '@/features/nfe/api';
+import { useConferenciaDeXml } from '@/features/nfe/useConferenciaDeXml';
 import type { NfeUploadProgress } from '@/features/nfe/api';
 import { queryKeys } from '@/lib/query-keys';
 import { formatCurrency, formatDate } from '@/lib/format';
-import type { StagingFile } from '@/features/nfe/types';
+import type { StagingFile, VerificacaoArquivo } from '@/features/nfe/types';
 import { STATUS_NF_LABELS, TIPO_NF_LABELS } from '@/features/nfe/types';
 import {
   useDocumentosResumo, useHistoricoDocumento, useUploadDocumento,
@@ -78,9 +79,12 @@ function formatBytes(bytes: number) {
 interface DropzoneProps {
   files: File[];
   onChange: (files: File[]) => void;
+  /** A conferência de cada arquivo antes do envio; nula enquanto não foi conferido. */
+  conferencia: (f: File) => VerificacaoArquivo | null;
+  conferindo: boolean;
 }
 
-function Dropzone({ files, onChange }: DropzoneProps) {
+function Dropzone({ files, onChange, conferencia, conferindo }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -134,11 +138,13 @@ function Dropzone({ files, onChange }: DropzoneProps) {
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map((file, idx) => (
-            <div key={idx} className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+            <div key={idx} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
+              conferencia(file)?.status === 'ERRO' ? 'border-red-300 bg-red-50/50' : conferencia(file)?.status === 'DUPLICADA' ? 'border-amber-300 bg-amber-50/50' : 'bg-muted/30'
+            }`}>
               <FileText className="size-4 shrink-0 text-muted-foreground" />
               <div className="flex-1 min-w-0">
                 <p className="truncate text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
+                <ConferenciaDoArquivo file={file} v={conferencia(file)} conferindo={conferindo} />
               </div>
               <button
                 type="button"
@@ -151,6 +157,27 @@ function Dropzone({ files, onChange }: DropzoneProps) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** O que a conferência achou de um arquivo, em uma ou duas linhas: o que é, e por que não será recebido, se for o caso. */
+function ConferenciaDoArquivo({ file, v, conferindo }: { file: File; v: VerificacaoArquivo | null; conferindo: boolean }) {
+  if (!v) {
+    return <p className="text-xs text-muted-foreground">{formatBytes(file.size)}{conferindo ? ' · conferindo…' : ''}</p>;
+  }
+  if (v.status === 'ERRO') {
+    return <p className="text-xs text-red-700">{v.mensagem}</p>;
+  }
+  if (v.status === 'DUPLICADA') {
+    return <p className="text-xs text-amber-700">{v.mensagem} Não será enviado de novo.</p>;
+  }
+  const detalhe = [v.tipoNf ? TIPO_NF_LABELS[v.tipoNf] : null, v.numero ? `NF ${v.numero}${v.serie ? `/${v.serie}` : ''}` : null, v.valorTotal != null ? formatCurrency(v.valorTotal) : null]
+    .filter(Boolean).join(' · ');
+  return (
+    <div className="space-y-0.5">
+      <p className="text-xs text-emerald-700">{detalhe ? `Pronto para enviar · ${detalhe}` : 'Pronto para enviar'}</p>
+      {v.avisos.map((a) => <p key={a} className="text-xs text-muted-foreground">{a}</p>)}
     </div>
   );
 }
@@ -404,6 +431,10 @@ export default function DocumentosPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<NfeUploadProgress | null>(null);
   const [result, setResult] = useState<StagingFile[] | null>(null);
+  const conferencia = useConferenciaDeXml(companyId, files);
+  // Vai para o envio o que a conferência liberou (ou o que ainda não foi conferido): erro e nota repetida ficam de fora, com o motivo na lista.
+  const enviaveis = files.filter((f) => { const v = conferencia.de(f); return !v || v.status === 'OK'; });
+  const naoEnviaveis = files.length - enviaveis.length;
 
   const [nfSubTab, setNfSubTab] = useState<'entrada' | 'saida'>('entrada');
   const hoje = new Date();
@@ -434,10 +465,14 @@ export default function DocumentosPage() {
       toast.error('Selecione ao menos um arquivo XML.');
       return;
     }
+    if (enviaveis.length === 0) {
+      toast.error('Nenhum dos arquivos pode ser enviado. Veja o motivo de cada um na lista.');
+      return;
+    }
     setUploading(true);
     setUploadProgress(null);
     try {
-      const res = await uploadNfeStagingEmLotes(companyId, files, setUploadProgress);
+      const res = await uploadNfeStagingEmLotes(companyId, enviaveis, setUploadProgress);
       setResult(res.arquivos);
       setFiles([]);
       const erros = res.arquivos.filter((f) => f.status === 'ERRO').length;
@@ -490,11 +525,23 @@ export default function DocumentosPage() {
                 </>
               ) : (
                 <>
-                  <Dropzone files={files} onChange={setFiles} />
+                  <Dropzone files={files} onChange={setFiles} conferencia={conferencia.de} conferindo={conferencia.conferindo} />
                   {files.length > 0 && (
-                    <Button onClick={handleUpload} disabled={uploading} className="w-full sm:w-auto">
-                      {uploading ? 'Enviando…' : `Enviar ${files.length} arquivo(s)`}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button onClick={handleUpload} disabled={uploading || conferencia.conferindo || enviaveis.length === 0} className="w-full sm:w-auto">
+                        {uploading ? 'Enviando…' : conferencia.conferindo ? 'Conferindo os arquivos…' : `Enviar ${enviaveis.length} arquivo(s)`}
+                      </Button>
+                      {naoEnviaveis > 0 && !conferencia.conferindo && (
+                        <>
+                          <span className="text-sm text-muted-foreground">
+                            {naoEnviaveis} arquivo(s) não será(ão) enviado(s): repetido(s) ou com erro.
+                          </span>
+                          <Button variant="outline" size="sm" onClick={() => setFiles(enviaveis)}>
+                            Remover da lista
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   )}
                 </>
               )}
