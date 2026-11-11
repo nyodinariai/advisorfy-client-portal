@@ -13,6 +13,24 @@ export interface StagingResult {
   arquivos: StagingFile[];
 }
 
+/** A conferência de um XML antes do envio. OK: será recebido. DUPLICADA: já foi enviado antes ou repete outro arquivo do envio. ERRO: não dá para importar. */
+export type VerificacaoStatus = 'OK' | 'DUPLICADA' | 'ERRO';
+
+export interface VerificacaoArquivo {
+  nome: string;
+  status: VerificacaoStatus;
+  /** Por que o arquivo não vai ser recebido (DUPLICADA ou ERRO). */
+  mensagem: string | null;
+  chaveAcesso: string | null;
+  numero: string | null;
+  serie: string | null;
+  tipoNf: TipoNf | null;
+  ehEntrada: boolean | null;
+  valorTotal: number | null;
+  /** Observações que não impedem o envio (por exemplo, devolução de venda). */
+  avisos: string[];
+}
+
 export type TipoNf = 'COMPRA' | 'VENDA' | 'DEVOLUCAO_COMPRA' | 'DEVOLUCAO_VENDA' | 'COMPLEMENTAR' | 'OUTROS';
 
 export const TIPO_NF_LABELS: Record<TipoNf, string> = {

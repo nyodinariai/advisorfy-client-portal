@@ -1,6 +1,6 @@
 import api from '@/lib/api';
 import type {
-  NotaFiscalEntrada, NotaFiscalSaida, StagingHistoricoItem, StagingResult,
+  NotaFiscalEntrada, NotaFiscalSaida, StagingHistoricoItem, StagingResult, VerificacaoArquivo,
 } from './types';
 
 export async function uploadNfeStaging(
@@ -73,6 +73,38 @@ export async function uploadNfeStagingEmLotes(
     });
   }
 
+  return resultado;
+}
+
+/**
+ * Confere os XMLs no servidor antes do envio, sem importar nada: o que cada um é, se a nota é da empresa e se já foi enviada. Em lotes, como o envio. Um lote que falha
+ * (rede, tempo esgotado) deixa seus arquivos como ERRO com o motivo, e o restante segue.
+ */
+export async function verificarNfeStagingEmLotes(
+  companyId: string,
+  files: File[]
+): Promise<VerificacaoArquivo[]> {
+  const resultado: VerificacaoArquivo[] = [];
+  for (let i = 0; i < files.length; i += NFE_UPLOAD_BATCH_SIZE) {
+    const lote = files.slice(i, i + NFE_UPLOAD_BATCH_SIZE);
+    try {
+      const form = new FormData();
+      lote.forEach((f) => form.append('xmlFiles', f));
+      const { data } = await api.post<{ arquivos: VerificacaoArquivo[] }>(
+        `/api/portal/companies/${companyId}/nfe/staging/verificar`,
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      resultado.push(...data.arquivos);
+    } catch {
+      // Sem resposta do servidor não dá para dizer que o arquivo está errado: segue como enviável, com o aviso.
+      lote.forEach((f) => resultado.push({
+        nome: f.name, status: 'OK', mensagem: null,
+        chaveAcesso: null, numero: null, serie: null, tipoNf: null, ehEntrada: null, valorTotal: null,
+        avisos: ['Não foi possível conferir este arquivo agora (falha de conexão com o servidor). Ele ainda pode ser enviado.'],
+      }));
+    }
+  }
   return resultado;
 }
 
