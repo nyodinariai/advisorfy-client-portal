@@ -11,7 +11,6 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useAccounts } from '@/features/accounting/queries';
 import { formatCurrency } from '@/lib/format';
-import { DemonstracoesPublicadas } from '@/features/accounting/DemonstracoesPublicadas';
 import type { Account } from '@/features/accounting/types';
 
 // ---------------------------------------------------------------------------
@@ -130,19 +129,14 @@ export default function DemonstracoesPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Demonstrações Contábeis</h1>
-      <p className="text-sm text-muted-foreground">Somente leitura. "Publicadas" traz o fechamento aprovado pelo escritório; as demais abas são provisórias, geradas ao vivo dos dados contábeis.</p>
+      <p className="text-sm text-muted-foreground">Somente leitura — números provisórios, gerados ao vivo dos dados contábeis. O fechamento aprovado pelo escritório fica em Relatórios Contábeis.</p>
 
-      <Tabs defaultValue="publicadas">
+      <Tabs defaultValue="balancete">
         <TabsList>
-          <TabsTrigger value="publicadas">Publicadas</TabsTrigger>
-          <TabsTrigger value="balancete">Balancete (provisório)</TabsTrigger>
-          <TabsTrigger value="dre">DRE (provisória)</TabsTrigger>
-          <TabsTrigger value="balanco">Balanço (provisório)</TabsTrigger>
+          <TabsTrigger value="balancete">Balancete</TabsTrigger>
+          <TabsTrigger value="dre">DRE</TabsTrigger>
+          <TabsTrigger value="balanco">Balanço Patrimonial</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="publicadas" className="mt-4">
-          <DemonstracoesPublicadas />
-        </TabsContent>
 
         {/* Balancete */}
         <TabsContent value="balancete" className="mt-4">
