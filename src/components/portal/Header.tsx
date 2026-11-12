@@ -20,7 +20,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/conferencia': 'Conferência',
   '/folha': 'Folha de Pagamento',
   '/relatorios-contabeis': 'Relatórios Contábeis',
-  '/demonstracoes': 'Demonstrações',
   '/obrigacoes': 'Obrigações',
   '/minha-empresa': 'Minha Empresa',
 };

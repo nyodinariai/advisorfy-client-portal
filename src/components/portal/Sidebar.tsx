@@ -32,7 +32,6 @@ const baseNavItems = [
   { href: '/mensalidades', label: 'Mensalidades', icon: Wallet },
   { href: '/folha', label: 'Folha de Pagamento', icon: Users },
   { href: '/relatorios-contabeis', label: 'Relatórios Contábeis', icon: BarChart3 },
-  { href: '/demonstracoes', label: 'Demonstrações (provisório)', icon: Scale },
   { href: '/obrigacoes', label: 'Obrigações', icon: ClipboardList },
   { href: '/minha-empresa', label: 'Minha Empresa', icon: Building2 },
   { href: '/certificado', label: 'Certificado digital', icon: ShieldCheck },
