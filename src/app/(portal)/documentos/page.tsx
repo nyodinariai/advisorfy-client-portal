@@ -1,434 +1,186 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  Upload, FileText, X, CheckCircle2, AlertCircle, Clock, Download, Search,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { AlertCircle, CheckCircle2, Clock, Download, FileText, Upload, X } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { useNfeStagingHistory, useNotasEntrada, useNotasSaida } from '@/features/nfe/queries';
-import { uploadNfeStagingEmLotes } from '@/features/nfe/api';
-import { useConferenciaDeXml } from '@/features/nfe/useConferenciaDeXml';
-import type { NfeUploadProgress } from '@/features/nfe/api';
-import { queryKeys } from '@/lib/query-keys';
-import { formatCurrency, formatDate } from '@/lib/format';
-import type { StagingFile, VerificacaoArquivo } from '@/features/nfe/types';
-import { STATUS_NF_LABELS, TIPO_NF_LABELS } from '@/features/nfe/types';
+import { FaixasPeriodo } from '@/components/portal/FaixasPeriodo';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDate } from '@/lib/format';
 import {
-  useDocumentosResumo, useHistoricoDocumento, useUploadDocumento,
-} from '@/features/documentos/queries';
-import { fetchDownloadUrl, fetchTemplateUrl } from '@/features/documentos/api';
-import { DOCUMENT_STATUS_LABELS } from '@/features/documentos/types';
-import type { DocumentTypeSummary } from '@/features/documentos/types';
+  mensagemDeErro, urlDoArquivo, urlDoModelo, useConcluirEnvio, useDocumentosDoMes, useEnviarArquivos, useResponder, useSemMovimento,
+  type ItemDoMes, type ResultadoDoEnvio, type SituacaoItem,
+} from '@/features/documentos-mes/central';
 
-const MESES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
-const GRUPO_LABELS: Record<string, string> = {
-  BANCARIO_FINANCEIRO: 'Bancário & Financeiro',
-  OPERACOES_CREDITO: 'Operações de crédito & investimento',
-  PATRIMONIO_ESTOQUE: 'Patrimônio & estoque',
-  CONCILIACAO: 'Conciliação',
+const SITUACAO: Record<SituacaoItem, { rotulo: string; variante: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  PENDENTE: { rotulo: 'Pendente', variante: 'outline' },
+  ENVIADO: { rotulo: 'Enviado', variante: 'secondary' },
+  RESPONDIDO: { rotulo: 'Respondido', variante: 'secondary' },
+  APROVADO: { rotulo: 'Aprovado', variante: 'default' },
+  REJEITADO: { rotulo: 'Rejeitado', variante: 'destructive' },
+  DISPENSADO: { rotulo: 'Sem movimento', variante: 'outline' },
 };
 
-const GRUPO_ORDEM = ['BANCARIO_FINANCEIRO', 'OPERACOES_CREDITO', 'PATRIMONIO_ESTOQUE', 'CONCILIACAO'];
-
-const BATCH_STATUS_LABEL: Record<string, string> = {
-  RASCUNHO: 'Aguardando revisão do contador',
-  CONFIRMADA: 'Confirmada',
-  ESTOQUE_ATUALIZADO: 'Confirmada',
-  CONTABILIZADA: 'Processada',
-  CANCELADA: 'Cancelada',
+const ACEITOS: Record<string, string> = {
+  NFE: '.xml,.zip', NFCE: '.xml,.zip', NFSE: '.xml,.pdf,.zip', OFX: '.ofx,.csv,.pdf', ESTOQUE: '.xlsx,.xls,.csv,.pdf', COMUM: '.pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.docx,.doc',
 };
 
-const BATCH_STATUS_ICON: Record<string, React.ReactNode> = {
-  RASCUNHO: <Clock className="size-3.5 text-amber-600" />,
-  CONFIRMADA: <CheckCircle2 className="size-3.5 text-emerald-600" />,
-  ESTOQUE_ATUALIZADO: <CheckCircle2 className="size-3.5 text-emerald-600" />,
-  CONTABILIZADA: <CheckCircle2 className="size-3.5 text-emerald-600" />,
-  CANCELADA: <AlertCircle className="size-3.5 text-muted-foreground" />,
-};
-
-function formatBytes(bytes: number) {
+function tamanho(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// ---------------------------------------------------------------------------
-// Dropzone (XML de notas fiscais)
-// ---------------------------------------------------------------------------
-
-interface DropzoneProps {
-  files: File[];
-  onChange: (files: File[]) => void;
-  /** A conferência de cada arquivo antes do envio; nula enquanto não foi conferido. */
-  conferencia: (f: File) => VerificacaoArquivo | null;
-  conferindo: boolean;
-}
-
-function Dropzone({ files, onChange, conferencia, conferindo }: DropzoneProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-
-  function addFiles(newFiles: FileList | null) {
-    if (!newFiles) return;
-    const xmlFiles = Array.from(newFiles).filter((f) => f.name.toLowerCase().endsWith('.xml'));
-    if (xmlFiles.length === 0) {
-      toast.error('Apenas arquivos .xml são aceitos.');
-      return;
-    }
-    onChange([...files, ...xmlFiles]);
+async function abrir(obter: () => Promise<string>) {
+  try {
+    window.open(await obter(), '_blank', 'noopener');
+  } catch (e) {
+    toast.error(mensagemDeErro(e, 'Não foi possível abrir o arquivo.'));
   }
-
-  function removeFile(idx: number) {
-    onChange(files.filter((_, i) => i !== idx));
-  }
-
-  return (
-    <div className="space-y-3">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 transition-colors ${
-          dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'
-        }`}
-      >
-        <Upload className="size-8 text-muted-foreground" />
-        <div className="text-center">
-          <p className="text-sm font-medium">
-            Arraste XMLs aqui ou <span className="text-primary">clique para selecionar</span>
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            XML de NF-e/NFC-e/NFS-e — identificamos automaticamente entrada, saída, devolução e complementar.
-          </p>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xml"
-          multiple
-          className="hidden"
-          onChange={(e) => addFiles(e.target.files)}
-        />
-      </div>
-
-      {files.length > 0 && (
-        <div className="space-y-2">
-          {files.map((file, idx) => (
-            <div key={idx} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-              conferencia(file)?.status === 'ERRO' ? 'border-red-300 bg-red-50/50' : conferencia(file)?.status === 'DUPLICADA' ? 'border-amber-300 bg-amber-50/50' : conferencia(file)?.status === 'CANCELAMENTO' ? 'border-blue-300 bg-blue-50/50' : 'bg-muted/30'
-            }`}>
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium">{file.name}</p>
-                <ConferenciaDoArquivo file={file} v={conferencia(file)} conferindo={conferindo} />
-              </div>
-              <button
-                type="button"
-                onClick={() => removeFile(idx)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** O que a conferência achou de um arquivo, em uma ou duas linhas: o que é, e por que não será recebido, se for o caso. */
-function ConferenciaDoArquivo({ file, v, conferindo }: { file: File; v: VerificacaoArquivo | null; conferindo: boolean }) {
-  if (!v) {
-    return <p className="text-xs text-muted-foreground">{formatBytes(file.size)}{conferindo ? ' · conferindo…' : ''}</p>;
-  }
-  if (v.status === 'ERRO') {
-    return <p className="text-xs text-red-700">{v.mensagem}</p>;
-  }
-  if (v.status === 'DUPLICADA') {
-    return <p className="text-xs text-amber-700">{v.mensagem} Não será enviado de novo.</p>;
-  }
-  if (v.status === 'CANCELAMENTO') {
-    return <p className="text-xs text-blue-700">Evento de cancelamento · {v.mensagem}</p>;
-  }
-  if (v.status === 'IGNORADO') {
-    return <p className="text-xs text-muted-foreground">{v.mensagem}</p>;
-  }
-  const detalhe = [v.tipoNf ? TIPO_NF_LABELS[v.tipoNf] : null, v.numero ? `NF ${v.numero}${v.serie ? `/${v.serie}` : ''}` : null, v.valorTotal != null ? formatCurrency(v.valorTotal) : null]
-    .filter(Boolean).join(' · ');
-  return (
-    <div className="space-y-0.5">
-      <p className="text-xs text-emerald-700">{detalhe ? `Pronto para enviar · ${detalhe}` : 'Pronto para enviar'}</p>
-      {v.avisos.map((a) => <p key={a} className="text-xs text-muted-foreground">{a}</p>)}
-    </div>
-  );
-}
-
-function UploadProgressBar({ progress }: { progress: NfeUploadProgress }) {
-  const percent = Math.round((progress.arquivosEnviados / progress.totalArquivos) * 100);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">Enviando lote {progress.loteAtual} de {progress.totalLotes}…</span>
-        <span className="text-muted-foreground tabular-nums">
-          {progress.arquivosEnviados}/{progress.totalArquivos} arquivos
-        </span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-const STATUS_DO_ARQUIVO: Record<StagingFile['status'], string> = {
-  AGUARDANDO: 'Recebida',
-  DUPLICADA: 'Duplicada',
-  ERRO: 'Erro',
-  CANCELAMENTO: 'Cancelamento aplicado',
-  CANCELAMENTO_PENDENTE: 'Cancelamento pendente',
-  IGNORADO: 'Ignorado',
-};
-
-function UploadResult({ files }: { files: StagingFile[] }) {
-  return (
-    <div className="space-y-2">
-      {files.map((f, idx) => (
-        <div key={idx} className="flex items-center gap-3 rounded-lg border px-3 py-2">
-          {f.status === 'AGUARDANDO' || f.status === 'CANCELAMENTO' ? (
-            <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-          ) : f.status === 'DUPLICADA' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO' ? (
-            <AlertCircle className="size-4 text-amber-600 shrink-0" />
-          ) : (
-            <AlertCircle className="size-4 text-red-600 shrink-0" />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm">{f.nome}</p>
-            {f.status === 'ERRO' ? (
-              <p className="text-xs text-red-600 truncate">{f.mensagemErro}</p>
-            ) : f.status === 'CANCELAMENTO' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO' ? (
-              <p className="text-xs text-muted-foreground">{f.mensagemErro}</p>
-            ) : (
-              <p className="font-mono text-xs text-muted-foreground truncate">{f.chaveAcesso}</p>
-            )}
-          </div>
-          <Badge
-            variant="outline"
-            className={
-              f.status === 'AGUARDANDO' || f.status === 'CANCELAMENTO'
-                ? 'text-emerald-700 border-emerald-300'
-                : f.status === 'DUPLICADA' || f.status === 'CANCELAMENTO_PENDENTE' || f.status === 'IGNORADO'
-                ? 'text-amber-700 border-amber-300'
-                : 'text-red-700 border-red-300'
-            }
-          >
-            {STATUS_DO_ARQUIVO[f.status]}
-          </Badge>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
-// Documentos Contábeis — checklist row + diálogo de histórico
+// Envio de arquivos
 // ---------------------------------------------------------------------------
 
-function DocumentoRow({
-  tipo, companyId, ano, mes, onOpenHistorico,
-}: {
-  tipo: DocumentTypeSummary; companyId: string; ano: number; mes: number;
-  onOpenHistorico: (tipo: DocumentTypeSummary) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const upload = useUploadDocumento(companyId);
-  const cobraCompetencia = tipo.periodicidade !== 'UNICO';
+function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: ItemDoMes; onClose: () => void }) {
+  const entrada = useRef<HTMLInputElement>(null);
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [arrastando, setArrastando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoDoEnvio | null>(null);
+  const enviar = useEnviarArquivos(companyId);
+  const lote = item.modalidade === 'LOTE';
 
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
+  function adicionar(lista: FileList | null) {
+    if (!lista) return;
+    const novos = Array.from(lista);
+    setArquivos((atual) => (lote ? [...atual, ...novos] : novos.slice(0, 1)));
+  }
+
+  async function confirmar() {
     try {
-      await upload.mutateAsync({
-        typeId: tipo.typeId,
-        file,
-        referenciaAno: cobraCompetencia ? ano : undefined,
-        referenciaMes: cobraCompetencia ? mes : undefined,
-      });
-      toast.success('Documento enviado.');
-    } catch {
-      toast.error('Erro ao enviar documento. Tente novamente.');
-    }
-  }
-
-  async function handleBaixarModelo() {
-    try {
-      const url = await fetchTemplateUrl(companyId, tipo.typeId);
-      window.open(url, '_blank');
-    } catch {
-      toast.error('Modelo indisponível para este documento.');
-    }
-  }
-
-  const latest = tipo.latestDocument;
-
-  return (
-    <div className="flex items-center gap-3.5 py-3.5 border-b last:border-b-0">
-      <div
-        className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
-          latest ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
-        }`}
-      >
-        <FileText className="size-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{tipo.typeName}</p>
-        {latest ? (
-          <p className="text-xs text-muted-foreground truncate">
-            {latest.fileName} · enviado {formatDate(latest.sentAt)}
-          </p>
-        ) : cobraCompetencia ? (
-          <p className="text-xs text-muted-foreground">
-            Nenhum arquivo para {String(mes).padStart(2, '0')}/{ano}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">Nenhum arquivo enviado</p>
-        )}
-      </div>
-      {latest && (
-        <Badge
-          variant="outline"
-          className={
-            latest.status === 'APPROVED'
-              ? 'text-emerald-700 border-emerald-300'
-              : latest.status === 'REJECTED'
-              ? 'text-red-700 border-red-300'
-              : 'text-amber-700 border-amber-300'
-          }
-        >
-          {DOCUMENT_STATUS_LABELS[latest.status]}
-        </Badge>
-      )}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {latest && (
-          <Button size="sm" variant="ghost" title="Ver histórico" onClick={() => onOpenHistorico(tipo)}>
-            <Clock className="size-4" />
-          </Button>
-        )}
-        {tipo.templateDisponivel && (
-          <Button size="sm" variant="ghost" onClick={handleBaixarModelo}>
-            <Download className="mr-1.5 size-3.5" />
-            Modelo
-          </Button>
-        )}
-        <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>
-          {upload.isPending ? 'Enviando…' : 'Enviar'}
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.docx,.doc"
-          className="hidden"
-          onChange={(e) => { void handleFile(e.target.files?.[0]); e.target.value = ''; }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function HistoricoDialog({
-  companyId, tipo, onClose,
-}: {
-  companyId: string; tipo: DocumentTypeSummary | null; onClose: () => void;
-}) {
-  const [q, setQ] = useState('');
-  const { data: historico, isLoading } = useHistoricoDocumento(
-    companyId, tipo?.typeId ?? null, q ? { q } : undefined
-  );
-
-  async function handleDownload(documentId: string) {
-    try {
-      const url = await fetchDownloadUrl(companyId, documentId);
-      window.open(url, '_blank');
-    } catch {
-      toast.error('Não foi possível gerar o link de download.');
+      const r = await enviar.mutateAsync({ itemId: item.id, arquivos });
+      setResultado(r);
+      if (r.comErro === 0) {
+        toast.success(r.aceitos === 1 ? 'Arquivo enviado.' : `${r.aceitos} arquivos enviados.`);
+        onClose();
+      }
+    } catch (e) {
+      toast.error(mensagemDeErro(e, 'Não foi possível enviar.'));
     }
   }
 
   return (
-    <Dialog open={!!tipo} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open onOpenChange={(aberto) => !aberto && onClose()}>
+      <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{tipo?.typeName}</DialogTitle>
-          <DialogDescription>Todos os arquivos enviados para este documento.</DialogDescription>
+          <DialogTitle>{item.titulo}</DialogTitle>
+          <DialogDescription>
+            {item.estabelecimento}.{' '}
+            {lote ? 'Você pode escolher vários arquivos ou um ZIP.' : 'Este item recebe um documento só. Se enviar de novo, o anterior fica no histórico.'}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
-          <Search className="size-3.5 text-muted-foreground shrink-0" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nome do arquivo…"
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-          />
-        </div>
+        {resultado ? (
+          <div className="space-y-3">
+            <p className="text-sm">
+              {resultado.aceitos} {resultado.aceitos === 1 ? 'arquivo aceito' : 'arquivos aceitos'}
+              {resultado.comErro > 0 && <span className="text-destructive">, {resultado.comErro} com problema. Corrija e envie só esses de novo.</span>}
+            </p>
+            <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
+              {resultado.arquivos.map((a, i) => (
+                <li key={`${a.arquivo}-${i}`} className="flex items-start gap-2 rounded-md border p-2">
+                  {a.situacao === 'ERRO' ? <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" /> : <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />}
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{a.arquivo}</span>
+                    <span className="block text-xs text-muted-foreground">{a.mensagem}{a.estabelecimento && item.escopo === 'ESTABELECIMENTO' ? ` · ${a.estabelecimento}` : ''}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end"><Button onClick={onClose}>Fechar</Button></div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => entrada.current?.click()}
+              onKeyDown={(e) => e.key === 'Enter' && entrada.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+              onDragLeave={() => setArrastando(false)}
+              onDrop={(e) => { e.preventDefault(); setArrastando(false); adicionar(e.dataTransfer.files); }}
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${arrastando ? 'border-primary bg-primary/5' : 'hover:border-primary/50 hover:bg-muted/50'}`}
+            >
+              <Upload className="size-7 text-muted-foreground" />
+              <p className="text-sm font-medium">Arraste aqui ou clique para escolher</p>
+              <p className="text-xs text-muted-foreground">Formatos: {ACEITOS[item.tratamento].replaceAll(',', ', ')}</p>
+              <input ref={entrada} type="file" multiple={lote} accept={ACEITOS[item.tratamento]} className="hidden" onChange={(e) => { adicionar(e.target.files); e.target.value = ''; }} />
+            </div>
+            {arquivos.length > 0 && (
+              <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                {arquivos.map((a, i) => (
+                  <li key={`${a.name}-${i}`} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+                    <FileText className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                    <span className="text-xs text-muted-foreground">{tamanho(a.size)}</span>
+                    <button type="button" aria-label={`Remover ${a.name}`} onClick={() => setArquivos((l) => l.filter((_, j) => j !== i))}><X className="size-4 text-muted-foreground" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button onClick={confirmar} disabled={arquivos.length === 0 || enviar.isPending}>
+                {enviar.isPending ? 'Enviando…' : `Enviar ${arquivos.length > 0 ? arquivos.length : ''}`.trim()}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-        <div className="max-h-96 overflow-y-auto divide-y">
-          {isLoading ? (
-            [1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full my-1" />)
-          ) : !historico || historico.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Nenhum arquivo encontrado.</p>
-          ) : (
-            historico.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 py-3">
-                <FileText className="size-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{d.fileName}</p>
-                  <p className="text-xs text-muted-foreground">Enviado em {formatDate(d.createdAt)}</p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    d.status === 'APPROVED'
-                      ? 'text-emerald-700 border-emerald-300'
-                      : d.status === 'REJECTED'
-                      ? 'text-red-700 border-red-300'
-                      : 'text-amber-700 border-amber-300'
-                  }
-                >
-                  {DOCUMENT_STATUS_LABELS[d.status]}
-                </Badge>
-                <Button size="sm" variant="ghost" onClick={() => handleDownload(d.id)}>
-                  <Download className="size-4" />
-                </Button>
-              </div>
-            ))
-          )}
+function RespostaDialog({ companyId, item, onClose }: { companyId: string; item: ItemDoMes; onClose: () => void }) {
+  const [texto, setTexto] = useState('');
+  const responder = useResponder(companyId);
+  return (
+    <Dialog open onOpenChange={(aberto) => !aberto && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Responder ao escritório</DialogTitle>
+          <DialogDescription>{item.titulo}</DialogDescription>
+        </DialogHeader>
+        <textarea
+          aria-label="Sua resposta"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Ex.: É aporte do sócio e não há contrato."
+          className="min-h-28 w-full rounded-md border bg-background p-2 text-sm"
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            disabled={!texto.trim() || responder.isPending}
+            onClick={async () => {
+              try {
+                await responder.mutateAsync({ itemId: item.id, texto });
+                toast.success('Resposta enviada. O escritório foi avisado.');
+                onClose();
+              } catch (e) {
+                toast.error(mensagemDeErro(e, 'Não foi possível responder.'));
+              }
+            }}
+          >Enviar resposta</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -436,389 +188,169 @@ function HistoricoDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Linha de um item
+// ---------------------------------------------------------------------------
+
+function LinhaDoItem({ companyId, item, numero, onEnviar, onResponder }: {
+  companyId: string; item: ItemDoMes; numero: number; onEnviar: (i: ItemDoMes) => void; onResponder: (i: ItemDoMes) => void;
+}) {
+  const sem = useSemMovimento(companyId);
+  const concluir = useConcluirEnvio(companyId);
+  const s = SITUACAO[item.situacao];
+  const vivos = item.envios.filter((e) => !e.substituido);
+  const comErro = vivos.filter((e) => e.status === 'REJECTED' && item.situacao !== 'REJEITADO').length;
+  const encerrado = item.situacao === 'APROVADO' || item.situacao === 'DISPENSADO';
+  const podeEnviar = !encerrado;
+  const avulso = item.origem === 'AVULSA';
+
+  return (
+    <TableRow>
+      <TableCell className="w-10 tabular-nums text-muted-foreground">{numero}</TableCell>
+      <TableCell className="whitespace-normal">
+        <div className="font-medium">{item.titulo}{!item.obrigatorio && <span className="ml-2 text-xs font-normal text-muted-foreground">opcional</span>}</div>
+        {item.texto && <div className="text-xs text-muted-foreground">{item.texto}</div>}
+        {item.motivo && <div className="mt-1 text-xs text-destructive">O escritório pediu de novo: {item.motivo}</div>}
+        {item.respostaTexto && <div className="mt-1 text-xs text-muted-foreground">Sua resposta: {item.respostaTexto}</div>}
+        {vivos.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {vivos.slice(0, 5).map((e) => (
+              <li key={e.id} className="flex items-start gap-1 text-xs text-muted-foreground">
+                <button type="button" className="truncate text-left underline-offset-2 hover:underline" onClick={() => abrir(() => urlDoArquivo(companyId, e.id))}>{e.arquivo}</button>
+                {e.resultado && <span className={e.status === 'REJECTED' ? 'text-destructive' : ''}>· {e.resultado}</span>}
+              </li>
+            ))}
+            {vivos.length > 5 && <li className="text-xs text-muted-foreground">e mais {vivos.length - 5} arquivos</li>}
+          </ul>
+        )}
+        {comErro > 0 && <div className="mt-1 text-xs text-destructive">{comErro} {comErro === 1 ? 'arquivo com problema' : 'arquivos com problema'}. Envie só esses de novo.</div>}
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-sm">
+        <span className={item.atrasado ? 'font-medium text-destructive' : ''}>{formatDate(item.prazo)}</span>
+      </TableCell>
+      <TableCell><Badge variant={s.variante}>{s.rotulo}</Badge></TableCell>
+      <TableCell className="whitespace-normal">
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {item.temModelo && item.tipoId && (
+            <Button size="sm" variant="outline" onClick={() => abrir(() => urlDoModelo(companyId, item.tipoId as string))}><Download className="size-3.5" /> Modelo</Button>
+          )}
+          {podeEnviar && (
+            <Button size="sm" onClick={() => onEnviar(item)}>
+              <Upload className="size-3.5" /> {item.situacao === 'PENDENTE' ? 'Fazer upload' : item.situacao === 'REJEITADO' ? 'Enviar de novo' : 'Enviar mais'}
+            </Button>
+          )}
+          {avulso && podeEnviar && <Button size="sm" variant="outline" onClick={() => onResponder(item)}>Responder</Button>}
+          {item.modalidade === 'LOTE' && item.situacao === 'ENVIADO' && !item.envioConcluido && (
+            <Button size="sm" variant="outline" disabled={concluir.isPending} onClick={() => concluir.mutate(item.id, { onSuccess: () => toast.success('Avisamos o escritório que você terminou.') })}>Terminei</Button>
+          )}
+          {!avulso && item.situacao === 'PENDENTE' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={sem.isPending}
+              onClick={() => {
+                if (window.confirm('Marcar este item como sem movimento neste mês?')) sem.mutate(item.id, { onError: (e) => toast.error(mensagemDeErro(e, 'Não foi possível marcar.')) });
+              }}
+            >Sem movimento</Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Página
 // ---------------------------------------------------------------------------
 
 export default function DocumentosPage() {
   const user = useAuthStore((s) => s.user);
   const companyId = user?.companyId ?? '';
-  const queryClient = useQueryClient();
-
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<NfeUploadProgress | null>(null);
-  const [result, setResult] = useState<StagingFile[] | null>(null);
-  const conferencia = useConferenciaDeXml(companyId, files);
-  // Vai para o envio o que a conferência liberou (ou o que ainda não foi conferido): erro e nota repetida ficam de fora, com o motivo na lista.
-  const enviaveis = files.filter((f) => { const v = conferencia.de(f); return !v || v.status === 'OK' || v.status === 'CANCELAMENTO'; });
-  const naoEnviaveis = files.length - enviaveis.length;
-
-  const [nfSubTab, setNfSubTab] = useState<'entrada' | 'saida'>('entrada');
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth() + 1);
+  const [envio, setEnvio] = useState<ItemDoMes | null>(null);
+  const [resposta, setResposta] = useState<ItemDoMes | null>(null);
+  const { data, isLoading, isError } = useDocumentosDoMes(companyId, ano, mes);
 
-  const [historicoTipo, setHistoricoTipo] = useState<DocumentTypeSummary | null>(null);
-
-  const { data: stagingHistory, isLoading: historyLoading } = useNfeStagingHistory(companyId);
-  const { data: notasEntrada, isLoading: entradaLoading } = useNotasEntrada(companyId, ano, mes);
-  const { data: notasSaida, isLoading: saidaLoading } = useNotasSaida(companyId, ano, mes);
-  const { data: resumo, isLoading: resumoLoading } = useDocumentosResumo(companyId, ano, mes);
-
-  const gruposOrdenados = useMemo(() => {
-    if (!resumo) return [];
-    const porGrupo = new Map<string, DocumentTypeSummary[]>();
-    resumo.types.forEach((t) => {
-      const chave = t.grupo ?? 'OUTROS';
-      if (!porGrupo.has(chave)) porGrupo.set(chave, []);
-      porGrupo.get(chave)!.push(t);
-    });
-    const ordem = [...GRUPO_ORDEM, ...[...porGrupo.keys()].filter((g) => !GRUPO_ORDEM.includes(g))];
-    return ordem.filter((g) => porGrupo.has(g)).map((g) => ({ grupo: g, tipos: porGrupo.get(g)! }));
-  }, [resumo]);
-
-  async function handleUpload() {
-    if (files.length === 0) {
-      toast.error('Selecione ao menos um arquivo XML.');
-      return;
-    }
-    if (enviaveis.length === 0) {
-      toast.error('Nenhum dos arquivos pode ser enviado. Veja o motivo de cada um na lista.');
-      return;
-    }
-    setUploading(true);
-    setUploadProgress(null);
-    try {
-      const res = await uploadNfeStagingEmLotes(companyId, enviaveis, setUploadProgress);
-      setResult(res.arquivos);
-      setFiles([]);
-      const erros = res.arquivos.filter((f) => f.status === 'ERRO').length;
-      const cancelamentos = res.arquivos.filter((f) => f.status === 'CANCELAMENTO' || f.status === 'CANCELAMENTO_PENDENTE').length;
-      toast.success(
-        `${res.recebidas} arquivo(s) recebido(s)`
-        + `${cancelamentos > 0 ? `, ${cancelamentos} cancelamento(s) de nota` : ''}`
-        + `${res.duplicadas > 0 ? `, ${res.duplicadas} duplicado(s)` : ''}`
-        + `${erros > 0 ? `, ${erros} com erro` : ''}.`
-      );
-      queryClient.invalidateQueries({ queryKey: queryKeys.nfeStagingHistory(companyId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.notasEntrada(companyId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.notasSaida(companyId) });
-    } catch {
-      toast.error('Erro ao enviar arquivos. Tente novamente.');
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  }
+  const avulsos = useMemo(() => (data?.itens ?? []).filter((i) => i.origem === 'AVULSA'), [data]);
+  const grupos = useMemo(() => {
+    const lista = (data?.itens ?? []).filter((i) => i.origem === 'CHECKLIST');
+    const porNome = new Map<string, ItemDoMes[]>();
+    lista.forEach((i) => porNome.set(i.estabelecimento, [...(porNome.get(i.estabelecimento) ?? []), i]));
+    // A matriz primeiro; os itens da empresa toda ficam sem cabeçalho de estabelecimento.
+    return Array.from(porNome.entries()).sort(([a], [b]) => (a.startsWith('Matriz') ? -1 : b.startsWith('Matriz') ? 1 : a.localeCompare(b)));
+  }, [data]);
+  const mostrarEstab = grupos.length > 1;
+  let contador = 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Documentos</h1>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold">Documentos</h1>
+        <p className="text-sm text-muted-foreground">O que o escritório precisa de você em {MESES[mes - 1]} de {ano}. Envie cada item até o prazo.</p>
+      </div>
 
-      <Tabs defaultValue="enviar">
-        <TabsList>
-          <TabsTrigger value="enviar">Enviar</TabsTrigger>
-          <TabsTrigger value="notas">Notas Fiscais</TabsTrigger>
-          <TabsTrigger value="contabeis">Documentos Contábeis</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-        </TabsList>
+      <FaixasPeriodo ano={ano} onAno={setAno} mes={mes} onMes={(m) => m && setMes(m)} />
 
-        {/* Enviar */}
-        <TabsContent value="enviar" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Enviar notas fiscais ao contador</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Selecione os XMLs das notas fiscais do período. O contador irá revisar e processar.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {uploading && uploadProgress ? (
-                <UploadProgressBar progress={uploadProgress} />
-              ) : result ? (
-                <>
-                  <UploadResult files={result} />
-                  <Button variant="outline" onClick={() => setResult(null)}>
-                    Enviar mais arquivos
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Dropzone files={files} onChange={setFiles} conferencia={conferencia.de} conferindo={conferencia.conferindo} />
-                  {files.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Button onClick={handleUpload} disabled={uploading || conferencia.conferindo || enviaveis.length === 0} className="w-full sm:w-auto">
-                        {uploading ? 'Enviando…' : conferencia.conferindo ? 'Conferindo os arquivos…' : `Enviar ${enviaveis.length} arquivo(s)`}
-                      </Button>
-                      {naoEnviaveis > 0 && !conferencia.conferindo && (
-                        <>
-                          <span className="text-sm text-muted-foreground">
-                            {naoEnviaveis} arquivo(s) não será(ão) enviado(s): repetido(s) ou com erro.
-                          </span>
-                          <Button variant="outline" size="sm" onClick={() => setFiles(enviaveis)}>
-                            Remover da lista
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+      {isLoading && <Skeleton className="h-64 w-full" />}
+      {isError && <p className="text-sm text-destructive">Não foi possível carregar os documentos deste mês.</p>}
 
-        {/* Notas Fiscais */}
-        <TabsContent value="notas" className="mt-4">
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex gap-1 rounded-lg bg-muted p-1">
-                  <button
-                    type="button"
-                    onClick={() => setNfSubTab('entrada')}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                      nfSubTab === 'entrada' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                    }`}
-                  >
-                    Entrada
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNfSubTab('saida')}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                      nfSubTab === 'saida' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                    }`}
-                  >
-                    Saída
-                  </button>
-                </div>
+      {data?.futuro && (
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">Este mês ainda não começou. Os documentos aparecem quando ele chegar.</CardContent></Card>
+      )}
 
-                <div className="flex items-center gap-2">
-                  <Select value={String(mes)} onValueChange={(v) => v && setMes(Number(v))}>
-                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {MESES.map((m, i) => (
-                        <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={String(ano)} onValueChange={(v) => v && setAno(Number(v))}>
-                    <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 4 }, (_, i) => hoje.getFullYear() - 2 + i).map((y) => (
-                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+      {data && !data.futuro && (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              ['Itens do mês', data.resumo.total, ''],
+              ['Enviados ou aprovados', data.resumo.enviados + data.resumo.aprovados, ''],
+              ['Pendentes', data.resumo.pendentes + data.resumo.rejeitados, data.resumo.pendentes + data.resumo.rejeitados > 0 ? 'text-amber-600' : ''],
+              ['Atrasados', data.resumo.atrasados, data.resumo.atrasados > 0 ? 'text-destructive' : ''],
+            ].map(([rotulo, valor, cor]) => (
+              <Card key={rotulo as string}><CardContent className="p-4"><div className="text-xs text-muted-foreground">{rotulo}</div><div className={`text-2xl font-semibold tabular-nums ${cor}`}>{valor}</div></CardContent></Card>
+            ))}
+          </div>
 
-              {nfSubTab === 'entrada' ? (
-                entradaLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-                  </div>
-                ) : !notasEntrada || notasEntrada.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma nota fiscal de entrada nesta competência.
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Número</TableHead>
-                        <TableHead>Fornecedor</TableHead>
-                        <TableHead>Emissão</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {notasEntrada.map((nf) => (
-                        <TableRow key={nf.id}>
-                          <TableCell className="font-mono text-sm">{nf.numero}</TableCell>
-                          <TableCell className="text-sm">{nf.fornecedorNome}</TableCell>
-                          <TableCell className="text-sm">{formatDate(nf.dataEmissao)}</TableCell>
-                          <TableCell className="text-sm">
-                            {nf.tipoNf && nf.tipoNf !== 'COMPRA' ? (
-                              <Badge variant="outline">{TIPO_NF_LABELS[nf.tipoNf]}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">Compra</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-sm font-medium">
-                            {formatCurrency(nf.valorTotal)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{STATUS_NF_LABELS[nf.status]}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )
-              ) : saidaLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : !notasSaida || notasSaida.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhuma nota fiscal de saída nesta competência.
-                </p>
-              ) : (
+          {avulsos.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="flex items-center gap-2 text-lg font-semibold"><Clock className="size-4" /> Solicitações do escritório</h2>
+              <p className="text-sm text-muted-foreground">Pedidos que o escritório fez por causa de uma movimentação ou de uma nota que faltou.</p>
+              <Card>
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Número</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Emissão</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Pedido</TableHead><TableHead>Prazo</TableHead><TableHead>Situação</TableHead><TableHead /></TableRow></TableHeader>
                   <TableBody>
-                    {notasSaida.map((nf) => (
-                      <TableRow key={nf.id}>
-                        <TableCell className="font-mono text-sm">{nf.numero}</TableCell>
-                        <TableCell className="text-sm">{nf.clienteNome}</TableCell>
-                        <TableCell className="text-sm">{formatDate(nf.dataEmissao)}</TableCell>
-                        <TableCell className="text-sm">
-                          {nf.tipoNf && nf.tipoNf !== 'VENDA' ? (
-                            <Badge variant="outline">{TIPO_NF_LABELS[nf.tipoNf]}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">Venda</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-medium">
-                          {formatCurrency(nf.valorTotal)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{STATUS_NF_LABELS[nf.status]}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {avulsos.map((i) => <LinhaDoItem key={i.id} companyId={companyId} item={i} numero={++contador} onEnviar={setEnvio} onResponder={setResposta} />)}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </Card>
+            </section>
+          )}
 
-        {/* Documentos Contábeis */}
-        <TabsContent value="contabeis" className="mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Checklist de documentos</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Documentos recorrentes (extratos, aging list…) valem para a competência selecionada.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Select value={String(mes)} onValueChange={(v) => v && setMes(Number(v))}>
-                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MESES.map((m, i) => (
-                      <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={String(ano)} onValueChange={(v) => v && setAno(Number(v))}>
-                  <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 4 }, (_, i) => hoje.getFullYear() - 2 + i).map((y) => (
-                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {resumoLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
-                </div>
-              ) : gruposOrdenados.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhum documento configurado pelo escritório ainda.
-                </p>
-              ) : (
-                gruposOrdenados.map(({ grupo, tipos }) => (
-                  <div key={grupo} className="mb-5 last:mb-0">
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {GRUPO_LABELS[grupo] ?? grupo}
-                    </p>
-                    <div>
-                      {tipos.map((tipo) => (
-                        <DocumentoRow
-                          key={tipo.typeId}
-                          tipo={tipo}
-                          companyId={companyId}
-                          ano={ano}
-                          mes={mes}
-                          onOpenHistorico={setHistoricoTipo}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Histórico */}
-        <TabsContent value="historico" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              {historyLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-                </div>
-              ) : !stagingHistory || stagingHistory.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhum envio registrado.
-                </p>
-              ) : (
+          {grupos.map(([nome, itens]) => (
+            <section key={nome} className="space-y-2">
+              {mostrarEstab && <h2 className="text-lg font-semibold">{nome}</h2>}
+              <Card>
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nota</TableHead>
-                      <TableHead>Data do envio</TableHead>
-                      <TableHead>Direção</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Documento</TableHead><TableHead>Prazo</TableHead><TableHead>Situação</TableHead><TableHead /></TableRow></TableHeader>
                   <TableBody>
-                    {stagingHistory.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-mono text-sm">{item.numero}/{item.serie}</TableCell>
-                        <TableCell className="text-sm">{formatDate(item.criadoEm)}</TableCell>
-                        <TableCell className="text-sm">{item.ehEntrada ? 'Entrada' : 'Saída'}</TableCell>
-                        <TableCell className="text-right text-sm font-medium">
-                          {formatCurrency(item.valorTotal)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {BATCH_STATUS_ICON[item.status]}
-                            <span className="text-sm">{BATCH_STATUS_LABEL[item.status] ?? item.status}</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {itens.map((i) => <LinhaDoItem key={i.id} companyId={companyId} item={i} numero={++contador} onEnviar={setEnvio} onResponder={setResposta} />)}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </Card>
+            </section>
+          ))}
 
-      <HistoricoDialog companyId={companyId} tipo={historicoTipo} onClose={() => setHistoricoTipo(null)} />
+          {data.itens.length === 0 && <Card><CardContent className="p-6 text-sm text-muted-foreground">O escritório não pediu documentos para este mês.</CardContent></Card>}
+        </>
+      )}
+
+      <p className="text-sm text-muted-foreground">
+        Contratos e outros documentos que não são mensais ficam em <Link href="/documentos/permanentes" className="underline underline-offset-2">Documentos permanentes</Link>.
+      </p>
+
+      {envio && <EnvioDialog key={envio.id} companyId={companyId} item={envio} onClose={() => setEnvio(null)} />}
+      {resposta && <RespostaDialog key={resposta.id} companyId={companyId} item={resposta} onClose={() => setResposta(null)} />}
     </div>
   );
 }
