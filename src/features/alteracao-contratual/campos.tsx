@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OPCOES_LABELS, type Campo } from './types';
+import { formatCnpj } from '@/lib/cnpj';
 
 const digitos = (v: string) => v.replace(/\D/g, '');
 
@@ -13,8 +14,7 @@ function maskCpf(v: string) {
 }
 
 function maskCnpj(v: string) {
-  const d = digitos(v).slice(0, 14);
-  return d.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  return formatCnpj(v);
 }
 
 function maskCep(v: string) {
@@ -89,7 +89,7 @@ export function CampoInput({ campo, valor, onChange }: { campo: Campo; valor: st
       entrada = <Input id={id} inputMode="numeric" placeholder="000.000.000-00" value={maskCpf(valor)} onChange={(e) => onChange(digitos(e.target.value).slice(0, 11))} />;
       break;
     case 'CNPJ':
-      entrada = <Input id={id} inputMode="numeric" placeholder="00.000.000/0000-00" value={maskCnpj(valor)} onChange={(e) => onChange(digitos(e.target.value).slice(0, 14))} />;
+      entrada = <Input id={id} inputMode="text" placeholder="00.000.000/0000-00" value={maskCnpj(valor)} onChange={(e) => onChange(digitos(e.target.value).slice(0, 14))} />;
       break;
     case 'CEP':
       entrada = <Input id={id} inputMode="numeric" placeholder="00000-000" value={maskCep(valor)} onChange={(e) => onChange(digitos(e.target.value).slice(0, 8))} />;
