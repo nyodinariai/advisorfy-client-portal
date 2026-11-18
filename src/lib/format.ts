@@ -1,3 +1,5 @@
+import { formatCnpj as formatarCnpj } from '@/lib/cnpj';
+
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -9,5 +11,4 @@ export const formatDateLong = (dateString: string) =>
     new Date(dateString)
   );
 
-export const formatCnpj = (cnpj: string) =>
-  cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+export const formatCnpj = (cnpj: string) => formatarCnpj(cnpj);
