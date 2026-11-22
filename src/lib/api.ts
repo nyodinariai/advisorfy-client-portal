@@ -8,6 +8,7 @@ const AUTH_ENDPOINTS = [
   '/api/auth/login',
   '/api/auth/refresh',
   '/api/auth/select-tenant',
+  '/api/auth/hub',
   '/api/erp/users/accept-invitation',
 ];
 
