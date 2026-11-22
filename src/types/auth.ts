@@ -2,33 +2,35 @@ export type ClientRole = 'CLIENT_USER' | 'LEAD';
 
 export type UserRole = ClientRole;
 
-// Response from POST /api/auth/login — dois formatos possíveis:
-// 1. Pre-auth (múltiplos tenants ou LEAD): preAuthToken preenchido, accessToken nulo
-// 2. Login direto (1 tenant não-LEAD): accessToken preenchido, preAuthToken nulo
+// Response from POST /api/auth/login — dois formatos possíveis (os tokens vão só nos cookies HttpOnly, nunca no JSON):
+// 1. Pre-auth (mais de uma opção ou LEAD): preAuthToken + nome + opcoes (cada uma com uma referência opaca)
+// 2. Login direto (uma opção não-LEAD): autenticado = true
+export type TipoDeAcesso = 'PLATAFORMA' | 'ESCRITORIO' | 'EMPRESA' | 'CANDIDATURA';
+
+export interface OpcaoDeAcesso {
+  /** Referência opaca, de uso único e curta validade: é o que se devolve ao escolher. */
+  ref: string;
+  nome: string;
+  tipo: TipoDeAcesso;
+}
+
 export interface PreAuthResponse {
+  autenticado: false;
   preAuthToken: string;
-  name: string;
-  tenants: TenantInfo[];
+  nome: string;
+  opcoes: OpcaoDeAcesso[];
 }
 
 export interface DirectLoginResponse {
-  accessToken: string;
+  autenticado: true;
 }
 
 export type LoginResponse = PreAuthResponse | DirectLoginResponse;
 
-export interface TenantInfo {
-  tenantId: string;
-  name: string;
-  slug: string;
-  tenantType: 'ACCOUNTANT' | 'COMPANY' | 'LEAD';
-  role: string;
-}
-
 // Response from POST /api/auth/select-tenant
-// Dados do usuário disponíveis via GET /api/auth/me após armazenar o token
+// Dados do usuário disponíveis via GET /api/auth/me depois do login (autenticado pelo cookie)
 export interface SelectTenantResponse {
-  accessToken: string;
+  autenticado: boolean;
 }
 
 // Response from GET /api/auth/me
