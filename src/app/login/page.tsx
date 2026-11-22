@@ -6,10 +6,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Building2, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EntradaHub } from '@/components/auth/EntradaHub';
 import { useAuth } from '@/hooks/useAuth';
 import type { LoginResponse, OpcaoDeAcesso, PreAuthResponse } from '@/types/auth';
 
@@ -98,88 +99,6 @@ function CredentialsStep({ onSuccess }: { onSuccess: (res: LoginResponse) => voi
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — Company tenant selector
-// ---------------------------------------------------------------------------
-
-function TenantStep({
-  preAuth,
-  redirectTo,
-  onBack,
-}: {
-  preAuth: PreAuthResponse;
-  redirectTo: string;
-  onBack: () => void;
-}) {
-  const { selectTenant } = useAuth();
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-
-  const companyTenants: OpcaoDeAcesso[] = preAuth.opcoes.filter((t) => t.tipo === 'EMPRESA');
-
-  async function handleSelect(tenant: OpcaoDeAcesso) {
-    setLoadingId(tenant.ref);
-    try {
-      await selectTenant(preAuth.preAuthToken, tenant.ref, redirectTo);
-    } catch {
-      toast.error('Não foi possível acessar esta empresa. Tente novamente.');
-      setLoadingId(null);
-    }
-  }
-
-  return (
-    <>
-      <CardHeader className="space-y-1">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mb-1 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-3.5" />
-          Trocar conta
-        </button>
-        <CardTitle className="text-2xl font-semibold tracking-tight">
-          Selecione a empresa
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Olá, <span className="font-medium text-foreground">{preAuth.nome}</span>. Escolha a
-          empresa para continuar.
-        </p>
-      </CardHeader>
-      <CardContent>
-        {companyTenants.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            Nenhuma empresa encontrada para este usuário.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {companyTenants.map((tenant) => (
-              <li key={tenant.ref}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(tenant)}
-                  disabled={loadingId !== null}
-                  className="w-full flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <Building2 className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium">{tenant.nome}</p>
-                    <p className="text-xs text-muted-foreground">Empresa</p>
-                  </div>
-                  {loadingId === tenant.ref ? (
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="size-4 text-muted-foreground" />
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Inner page — needs Suspense for useSearchParams
 // ---------------------------------------------------------------------------
 
@@ -225,19 +144,7 @@ function LoginPageInner() {
       return;
     }
 
-    const companyTenants = res.opcoes.filter((t: OpcaoDeAcesso) => t.tipo === 'EMPRESA');
-
-    if (companyTenants.length === 1) {
-      setIsAutoSelecting(true);
-      try {
-        await selectTenant(res.preAuthToken, companyTenants[0].ref, redirectTo);
-      } catch {
-        toast.error('Não foi possível acessar a empresa. Tente novamente.');
-        setIsAutoSelecting(false);
-      }
-      return;
-    }
-
+    // Mesmo com uma empresa só, a pessoa passa pela tela de entrada: ela traz os comunicados da plataforma.
     setPreAuth(res as PreAuthResponse);
   }
 
@@ -252,14 +159,22 @@ function LoginPageInner() {
     );
   }
 
+  if (preAuth !== null) {
+    return (
+      <EntradaHub
+        preAuth={preAuth}
+        titulo="Minhas empresas"
+        subtitulo="Escolha a empresa que você quer acompanhar."
+        onSelect={(ref) => selectTenant(preAuth.preAuthToken, ref, redirectTo)}
+        onBack={() => setPreAuth(null)}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
       <Card className="w-full max-w-sm shadow-md">
-        {preAuth === null ? (
-          <CredentialsStep onSuccess={handleCredentialsSuccess} />
-        ) : (
-          <TenantStep preAuth={preAuth} redirectTo={redirectTo} onBack={() => setPreAuth(null)} />
-        )}
+        <CredentialsStep onSuccess={handleCredentialsSuccess} />
       </Card>
     </div>
   );
