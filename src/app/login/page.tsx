@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
-import type { LoginResponse, PreAuthResponse, TenantInfo } from '@/types/auth';
+import type { LoginResponse, OpcaoDeAcesso, PreAuthResponse } from '@/types/auth';
 
 const schema = z.object({
   email: z.string().email({ message: 'E-mail inválido' }),
@@ -19,16 +19,6 @@ const schema = z.object({
 });
 
 type LoginForm = z.infer<typeof schema>;
-
-// Uma empresa cliente pode ter, pra mesma pessoa, um vínculo de papel PME (dono/usuário
-// da empresa) e, separadamente, um vínculo ACCOUNTANT (o escritório que atende essa
-// empresa também aparece como um "tenant tipo COMPANY" pro contador, via o acesso que
-// todo contador do escritório ganha a cada cliente). O client portal só faz sentido pro
-// papel PME — mostrar os dois deixaria a pessoa "entrar como cliente" numa sessão que na
-// verdade é de contador, e toda chamada de API do portal voltaria 403.
-function isPmeRole(role: string): boolean {
-  return role.startsWith('PME_');
-}
 
 // ---------------------------------------------------------------------------
 // Step 1 — Credentials
@@ -123,14 +113,12 @@ function TenantStep({
   const { selectTenant } = useAuth();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const companyTenants: TenantInfo[] = preAuth.tenants.filter(
-    (t) => t.tenantType === 'COMPANY' && isPmeRole(t.role),
-  );
+  const companyTenants: OpcaoDeAcesso[] = preAuth.opcoes.filter((t) => t.tipo === 'EMPRESA');
 
-  async function handleSelect(tenant: TenantInfo) {
-    setLoadingId(tenant.tenantId);
+  async function handleSelect(tenant: OpcaoDeAcesso) {
+    setLoadingId(tenant.ref);
     try {
-      await selectTenant(preAuth.preAuthToken, tenant.tenantId, tenant.role, redirectTo);
+      await selectTenant(preAuth.preAuthToken, tenant.ref, redirectTo);
     } catch {
       toast.error('Não foi possível acessar esta empresa. Tente novamente.');
       setLoadingId(null);
@@ -152,7 +140,7 @@ function TenantStep({
           Selecione a empresa
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Olá, <span className="font-medium text-foreground">{preAuth.name}</span>. Escolha a
+          Olá, <span className="font-medium text-foreground">{preAuth.nome}</span>. Escolha a
           empresa para continuar.
         </p>
       </CardHeader>
@@ -164,7 +152,7 @@ function TenantStep({
         ) : (
           <ul className="space-y-2">
             {companyTenants.map((tenant) => (
-              <li key={tenant.tenantId}>
+              <li key={tenant.ref}>
                 <button
                   type="button"
                   onClick={() => handleSelect(tenant)}
@@ -173,10 +161,10 @@ function TenantStep({
                 >
                   <Building2 className="size-4 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium">{tenant.name}</p>
-                    <p className="text-xs text-muted-foreground">{tenant.role}</p>
+                    <p className="truncate text-sm font-medium">{tenant.nome}</p>
+                    <p className="text-xs text-muted-foreground">Empresa</p>
                   </div>
-                  {loadingId === tenant.tenantId ? (
+                  {loadingId === tenant.ref ? (
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   ) : (
                     <ChevronRight className="size-4 text-muted-foreground" />
@@ -213,7 +201,7 @@ function LoginPageInner() {
   async function handleCredentialsSuccess(res: LoginResponse) {
     // Backend retorna login direto (preAuthToken null) quando o usuário tem
     // exatamente 1 tenant não-LEAD. Completa a sessão via /me sem passar por select-tenant.
-    if ('accessToken' in res) {
+    if (res.autenticado) {
       setIsAutoSelecting(true);
       try {
         await completeSessionWithToken(redirectTo);
@@ -225,11 +213,11 @@ function LoginPageInner() {
     }
 
     // Fluxo pre-auth: backend retornou lista de tenants para seleção
-    const leadTenants = res.tenants.filter((t: TenantInfo) => t.tenantType === 'LEAD');
+    const leadTenants = res.opcoes.filter((t: OpcaoDeAcesso) => t.tipo === 'CANDIDATURA');
     if (leadTenants.length > 0) {
       setIsAutoSelecting(true);
       try {
-        await selectLeadTenant(res.preAuthToken, leadTenants[0].tenantId, leadTenants[0].role);
+        await selectLeadTenant(res.preAuthToken, leadTenants[0].ref);
       } catch {
         toast.error('Não foi possível acessar o portal. Tente novamente.');
         setIsAutoSelecting(false);
@@ -237,14 +225,12 @@ function LoginPageInner() {
       return;
     }
 
-    const companyTenants = res.tenants.filter(
-      (t: TenantInfo) => t.tenantType === 'COMPANY' && isPmeRole(t.role),
-    );
+    const companyTenants = res.opcoes.filter((t: OpcaoDeAcesso) => t.tipo === 'EMPRESA');
 
     if (companyTenants.length === 1) {
       setIsAutoSelecting(true);
       try {
-        await selectTenant(res.preAuthToken, companyTenants[0].tenantId, companyTenants[0].role, redirectTo);
+        await selectTenant(res.preAuthToken, companyTenants[0].ref, redirectTo);
       } catch {
         toast.error('Não foi possível acessar a empresa. Tente novamente.');
         setIsAutoSelecting(false);

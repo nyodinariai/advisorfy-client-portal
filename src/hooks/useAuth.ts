@@ -51,23 +51,20 @@ export function useAuth() {
    *  saberia qual vínculo ativar. */
   async function selectTenant(
     preAuthToken: string,
-    tenantId: string,
-    role: string,
+    ref: string,
     redirectTo = '/inicio',
   ): Promise<void> {
     await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
-      tenantId,
-      role,
+      ref,
     });
     await completeSessionWithToken(redirectTo);
   }
 
-  async function selectLeadTenant(preAuthToken: string, tenantId: string, role: string): Promise<void> {
+  async function selectLeadTenant(preAuthToken: string, ref: string): Promise<void> {
     await api.post<SelectTenantResponse>('/api/auth/select-tenant', {
       preAuthToken,
-      tenantId,
-      role,
+      ref,
     });
     await completeSessionWithToken('/onboarding');
   }
