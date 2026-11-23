@@ -6,7 +6,7 @@ import { Heart, LayoutGrid, List, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { hubService, type ComunicadoView, type HubResponse } from '@/services/hub';
+import { hubService, type ComunicadoView, type HubResponse, type StatusDaEmpresa } from '@/services/hub';
 import type { OpcaoDeAcesso, PreAuthResponse } from '@/types/auth';
 
 /** Quantas opções entram na grade antes de "Mostrar mais". */
@@ -23,6 +23,19 @@ const ROTULO_TIPO: Record<OpcaoDeAcesso['tipo'], string> = {
 
 /** O link vira um href: só endereço seguro, mesmo que o servidor já valide. */
 const linkSeguro = (link: string | null) => (link && link.startsWith('https://') ? link : null);
+
+/** O selo do cartão da empresa: em dia ou com pendência (com o que está pendente). Sem situação, não mostra nada. */
+function SituacaoDaEmpresa({ status }: { status?: StatusDaEmpresa | null }) {
+  if (!status || status.situacao === 'INDISPONIVEL') return null;
+  if (status.situacao === 'EM_DIA') {
+    return <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">Em dia</p>;
+  }
+  const partes = [
+    status.guiasVencidas > 0 ? `${status.guiasVencidas} ${status.guiasVencidas === 1 ? 'guia vencida' : 'guias vencidas'}` : null,
+    status.mensalidadesEmAtraso > 0 ? `${status.mensalidadesEmAtraso} ${status.mensalidadesEmAtraso === 1 ? 'mensalidade em atraso' : 'mensalidades em atraso'}` : null,
+  ].filter(Boolean);
+  return <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">Com pendência: {partes.join(' e ')}</p>;
+}
 
 const ultimoAcesso = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : null);
 
@@ -59,7 +72,7 @@ export function EntradaHub({ preAuth, titulo, subtitulo, onSelect, onBack }: Pro
   const favoritar = useMutation({
     mutationFn: ({ ref, favorita }: { ref: string; favorita: boolean }) => hubService.favoritar(preAuth.preAuthToken, ref, favorita),
     onMutate: ({ ref, favorita }) => {
-      queryClient.setQueryData<HubResponse>(chave, (atual) => (atual ? { ...atual, opcoes: { ...atual.opcoes, [ref]: { ...(atual.opcoes[ref] ?? { ultimoAcesso: null }), favorita } } } : atual));
+      queryClient.setQueryData<HubResponse>(chave, (atual) => (atual ? { ...atual, opcoes: { ...atual.opcoes, [ref]: { ...(atual.opcoes[ref] ?? { ultimoAcesso: null, status: null }), favorita } } } : atual));
     },
     onError: () => {
       toast.error('Não foi possível salvar o favorito.');
@@ -194,6 +207,7 @@ export function EntradaHub({ preAuth, titulo, subtitulo, onSelect, onBack }: Pro
                     <div className="min-w-0">
                       <h2 className="break-words text-base font-semibold leading-tight">{o.nome}</h2>
                       {acesso && <p className="text-xs text-muted-foreground">Último acesso em {acesso}</p>}
+                      <SituacaoDaEmpresa status={extra?.status} />
                     </div>
                   </div>
                   <div className="flex justify-end px-4 pb-4">
