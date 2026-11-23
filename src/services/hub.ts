@@ -11,10 +11,18 @@ export interface ComunicadoView {
   textoDoLink: string | null;
 }
 
-/** Por referência de opção (a mesma do login): favorita e último acesso. */
+/** Espelha StatusDaEmpresaService.Status: a empresa do cliente em dia, com pendência (guia vencida e não paga, mensalidade em atraso) ou sem situação. */
+export interface StatusDaEmpresa {
+  situacao: 'EM_DIA' | 'COM_PENDENCIA' | 'INDISPONIVEL';
+  guiasVencidas: number;
+  mensalidadesEmAtraso: number;
+}
+
+/** Por referência de opção (a mesma do login): favorita, último acesso e, nas empresas do cliente, a situação (nulo nas demais opções). */
 export interface OpcaoExtra {
   favorita: boolean;
   ultimoAcesso: string | null;
+  status?: StatusDaEmpresa | null;
 }
 
 /** Espelha HubService.Hub: o que a tela de entrada mostra, para o mundo da pessoa. */
