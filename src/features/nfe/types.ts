@@ -67,6 +67,16 @@ export interface StagingHistoricoItem {
   criadoEm: string;
 }
 
+/** Espelha TentativasDeEnvioDoPortalService.Tentativa: um arquivo enviado e o que aconteceu com ele (AGUARDANDO, DUPLICADA, ERRO, IGNORADO...), com o motivo quando não entrou. */
+export interface TentativaDeEnvio {
+  id: string;
+  nomeArquivo: string | null;
+  chaveAcesso: string | null;
+  status: string;
+  mensagem: string | null;
+  criadoEm: string;
+}
+
 export interface NotaFiscalEntrada {
   id: string;
   numero: string;

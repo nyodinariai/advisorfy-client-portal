@@ -1,6 +1,6 @@
 import api from '@/lib/api';
 import type {
-  NotaFiscalEntrada, NotaFiscalSaida, StagingHistoricoItem, StagingResult, VerificacaoArquivo,
+  NotaFiscalEntrada, NotaFiscalSaida, StagingHistoricoItem, StagingResult, TentativaDeEnvio, VerificacaoArquivo,
 } from './types';
 
 export async function uploadNfeStaging(
@@ -112,6 +112,12 @@ export async function fetchNfeStagingHistory(companyId: string): Promise<Staging
   const { data } = await api.get<StagingHistoricoItem[]>(
     `/api/portal/companies/${companyId}/nfe/staging`
   );
+  return data;
+}
+
+/** Os arquivos enviados antes que não entraram, com o motivo de cada um: o motivo não depende de a resposta do envio ter chegado. */
+export async function fetchTentativasComFalha(companyId: string): Promise<TentativaDeEnvio[]> {
+  const { data } = await api.get<TentativaDeEnvio[]>(`/api/portal/companies/${companyId}/nfe/staging/tentativas`, { params: { apenasFalhas: true, limite: 50 } });
   return data;
 }
 

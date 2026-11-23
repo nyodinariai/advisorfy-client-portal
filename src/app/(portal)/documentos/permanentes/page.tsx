@@ -21,7 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useAuthStore } from '@/stores/authStore';
-import { useNfeStagingHistory, useNotasEntrada, useNotasSaida } from '@/features/nfe/queries';
+import { useNfeStagingHistory, useNotasEntrada, useNotasSaida, useTentativasComFalha } from '@/features/nfe/queries';
 import { uploadNfeStagingEmLotes } from '@/features/nfe/api';
 import { useConferenciaDeXml } from '@/features/nfe/useConferenciaDeXml';
 import type { NfeUploadProgress } from '@/features/nfe/api';
@@ -461,6 +461,7 @@ export default function DocumentosPage() {
   const [historicoTipo, setHistoricoTipo] = useState<DocumentTypeSummary | null>(null);
 
   const { data: stagingHistory, isLoading: historyLoading } = useNfeStagingHistory(companyId);
+  const { data: tentativasComFalha } = useTentativasComFalha(companyId);
   const { data: notasEntrada, isLoading: entradaLoading } = useNotasEntrada(companyId, ano, mes);
   const { data: notasSaida, isLoading: saidaLoading } = useNotasSaida(companyId, ano, mes);
   const { data: resumo, isLoading: resumoLoading } = useDocumentosResumo(companyId, ano, mes);
@@ -771,7 +772,33 @@ export default function DocumentosPage() {
         </TabsContent>
 
         {/* Histórico */}
-        <TabsContent value="historico" className="mt-4">
+        <TabsContent value="historico" className="mt-4 space-y-4">
+          {tentativasComFalha && tentativasComFalha.length > 0 && (
+            <Card>
+              <CardContent className="pt-6">
+                <h3 className="mb-1 text-sm font-semibold">Arquivos que não entraram</h3>
+                <p className="mb-3 text-xs text-muted-foreground">Os últimos envios com problema e o motivo de cada um. Corrija o arquivo e envie de novo.</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Arquivo</TableHead>
+                      <TableHead>Data do envio</TableHead>
+                      <TableHead>Motivo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tentativasComFalha.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="break-all font-mono text-xs">{t.nomeArquivo ?? '(sem nome)'}</TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">{formatDate(t.criadoEm)}</TableCell>
+                        <TableCell className="text-sm">{t.mensagem ?? 'Não foi possível importar este arquivo.'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent className="pt-6">
               {historyLoading ? (

@@ -1,11 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { fetchNfeStagingHistory, fetchNotasEntrada, fetchNotasSaida } from './api';
+import { fetchNfeStagingHistory, fetchNotasEntrada, fetchNotasSaida, fetchTentativasComFalha } from './api';
 
 export function useNfeStagingHistory(companyId: string) {
   return useQuery({
     queryKey: queryKeys.nfeStagingHistory(companyId),
     queryFn: () => fetchNfeStagingHistory(companyId),
+    enabled: !!companyId,
+  });
+}
+
+export function useTentativasComFalha(companyId: string) {
+  return useQuery({
+    queryKey: queryKeys.nfeTentativas(companyId),
+    queryFn: () => fetchTentativasComFalha(companyId),
     enabled: !!companyId,
   });
 }
