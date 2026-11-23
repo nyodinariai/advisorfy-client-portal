@@ -6,6 +6,8 @@ export const queryKeys = {
   comparativoRegimes: (companyId: string, ano: number) => ['comparativo-regimes', companyId, ano] as const,
   obrigacoes: (companyId: string) => ['obrigacoes', companyId] as const,
   nfeStagingHistory: (companyId: string) => ['nfe-staging', companyId] as const,
+  // começa com a chave do histórico: invalidar uma invalida a outra
+  nfeTentativas: (companyId: string) => ['nfe-staging', companyId, 'tentativas'] as const,
   notasEntrada: (companyId: string, filters?: object) => ['notas-entrada', companyId, filters] as const,
   notasSaida: (companyId: string, filters?: object) => ['notas-saida', companyId, filters] as const,
   employees: (companyId: string) => ['employees', companyId] as const,
