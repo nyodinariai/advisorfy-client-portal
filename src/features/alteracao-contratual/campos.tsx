@@ -5,30 +5,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OPCOES_LABELS, type Campo } from './types';
 import { formatCnpj } from '@/lib/cnpj';
+import { digitos, formatCep, formatCpf, formatTelefone } from '@/lib/campos';
 
-const digitos = (v: string) => v.replace(/\D/g, '');
-
-function maskCpf(v: string) {
-  const d = digitos(v).slice(0, 11);
-  return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-}
+const maskCpf = formatCpf;
 
 function maskCnpj(v: string) {
   return formatCnpj(v);
 }
 
-function maskCep(v: string) {
-  const d = digitos(v).slice(0, 8);
-  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
-}
-
-function maskTelefone(v: string) {
-  const d = digitos(v).slice(0, 11);
-  if (d.length <= 2) return d;
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-}
+const maskCep = formatCep;
+const maskTelefone = formatTelefone;
 
 /** O valor de um campo como o cliente lê (CPF e CNPJ com máscara, valor em reais, data em português). */
 export function formatarCampo(campo: Campo, valor: string): string {
