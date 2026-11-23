@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCpf as maskCpf } from '@/lib/campos';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -256,14 +257,6 @@ function EnderecoEmpresaSection() {
 // ---------------------------------------------------------------------------
 // Meus dados — CPF/RG de quem assina o contrato
 // ---------------------------------------------------------------------------
-
-function maskCpf(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-}
 
 const perfilSchema = z.object({
   cpf: z.string().optional(),
