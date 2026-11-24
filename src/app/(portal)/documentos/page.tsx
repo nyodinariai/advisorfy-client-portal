@@ -56,6 +56,7 @@ function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: It
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [arrastando, setArrastando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoDoEnvio | null>(null);
+  const [parte, setParte] = useState<{ atual: number; total: number } | null>(null);
   const enviar = useEnviarArquivos(companyId);
   const lote = item.modalidade === 'LOTE';
 
@@ -67,7 +68,7 @@ function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: It
 
   async function confirmar() {
     try {
-      const r = await enviar.mutateAsync({ itemId: item.id, arquivos });
+      const r = await enviar.mutateAsync({ itemId: item.id, arquivos, aoProgredir: (atual, total) => setParte({ atual, total }) });
       setResultado(r);
       if (r.comErro === 0) {
         toast.success(r.aceitos === 1 ? 'Arquivo enviado.' : `${r.aceitos} arquivos enviados.`);
@@ -85,7 +86,7 @@ function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: It
           <DialogTitle>{item.titulo}</DialogTitle>
           <DialogDescription>
             {item.estabelecimento}.{' '}
-            {lote ? 'Você pode escolher vários arquivos ou um ZIP.' : 'Este item recebe um documento só. Se enviar de novo, o anterior fica no histórico.'}
+            {lote ? 'Você pode escolher quantos arquivos precisar, ou um ZIP de até 20 MB; o portal os envia em partes.' : 'Este item recebe um documento só. Se enviar de novo, o anterior fica no histórico.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -95,8 +96,9 @@ function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: It
               {resultado.aceitos} {resultado.aceitos === 1 ? 'arquivo aceito' : 'arquivos aceitos'}
               {resultado.comErro > 0 && <span className="text-destructive">, {resultado.comErro} com problema. Corrija e envie só esses de novo.</span>}
             </p>
+            {resultado.arquivos.length > 50 && <p className="text-xs text-muted-foreground">Foram muitos arquivos: abaixo aparecem só os que tiveram problema.</p>}
             <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
-              {resultado.arquivos.map((a, i) => (
+              {(resultado.arquivos.length > 50 ? resultado.arquivos.filter((a) => a.situacao === 'ERRO') : resultado.arquivos).map((a, i) => (
                 <li key={`${a.arquivo}-${i}`} className="flex items-start gap-2 rounded-md border p-2">
                   {a.situacao === 'ERRO' ? <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" /> : <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />}
                   <span className="min-w-0">
@@ -140,7 +142,7 @@ function EnvioDialog({ companyId, item, onClose }: { companyId: string; item: It
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
               <Button onClick={confirmar} disabled={arquivos.length === 0 || enviar.isPending}>
-                {enviar.isPending ? 'Enviando…' : `Enviar ${arquivos.length > 0 ? arquivos.length : ''}`.trim()}
+                {enviar.isPending ? (parte && parte.total > 1 ? `Enviando parte ${parte.atual} de ${parte.total}…` : 'Enviando…') : `Enviar ${arquivos.length > 0 ? arquivos.length : ''}`.trim()}
               </Button>
             </div>
           </div>
