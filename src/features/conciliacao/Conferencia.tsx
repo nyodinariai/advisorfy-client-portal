@@ -21,7 +21,7 @@ const nomeDaConferencia = (c: Conferencia) => `${c.fonteDescricao.replace('Plani
  * A conferência da contabilidade com as planilhas do cliente. O escritório compara a planilha enviada com as notas fiscais importadas e publica aqui o que ficou diferente. A
  * nota fiscal é a referência; cada ponto traz o que a contabilidade viu e as opções para o cliente explicar o que aconteceu.
  */
-export function Conferencia({ companyId }: { companyId: string }) {
+export function Conferencia({ companyId, periodo }: { companyId: string; periodo?: { ano: number; mes: number } }) {
   const [aberta, setAberta] = useState<Conferencia | null>(null);
   const lista = useQuery({ queryKey: ['conferencias', companyId], queryFn: () => fetchConferencias(companyId), enabled: !!companyId });
 
@@ -29,13 +29,14 @@ export function Conferencia({ companyId }: { companyId: string }) {
   if (lista.isError) {
     return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Não foi possível carregar a conferência agora. Tente de novo em instantes.</AlertDescription></Alert>;
   }
-  const conferencias = lista.data ?? [];
+  // Com período escolhido (a página de Conciliações), só as conferências daquele mês.
+  const conferencias = (lista.data ?? []).filter((c) => !periodo || (c.ano === periodo.ano && c.mes === periodo.mes));
   if (conferencias.length === 0) {
     return (
       <div className="space-y-4">
-      <PlanilhaDeEstoque companyId={companyId} />
+      <PlanilhaDeEstoque key={periodo ? `${periodo.ano}-${periodo.mes}` : 'sem-periodo'} companyId={companyId} periodo={periodo} />
       <Card>
-        <CardHeader><CardTitle className="text-base">Nada para conferir por enquanto</CardTitle><CardDescription>Quando o escritório comparar suas planilhas com as notas fiscais e encontrar diferenças, elas aparecem aqui para você analisar.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="text-base">{periodo ? `Nada para conferir em ${MESES[periodo.mes - 1]} de ${periodo.ano}` : 'Nada para conferir por enquanto'}</CardTitle><CardDescription>Quando o escritório comparar suas planilhas com as notas fiscais e encontrar diferenças, elas aparecem aqui para você analisar.</CardDescription></CardHeader>
       </Card>
       </div>
     );
@@ -44,7 +45,7 @@ export function Conferencia({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-3">
-      <PlanilhaDeEstoque companyId={companyId} />
+      <PlanilhaDeEstoque key={periodo ? `${periodo.ano}-${periodo.mes}` : 'sem-periodo'} companyId={companyId} periodo={periodo} />
       {conferencias.map((c) => {
         const pendentes = c.total - c.respondidos;
         return (
@@ -77,10 +78,10 @@ function mesAnterior(): { ano: number; mes: number } {
  * O cliente baixa o modelo da planilha de estoque, preenche com as entradas e saídas do mês e envia por aqui. A contabilidade compara com as notas fiscais importadas e as
  * diferenças já aparecem nesta página, para ele responder.
  */
-function PlanilhaDeEstoque({ companyId }: { companyId: string }) {
+function PlanilhaDeEstoque({ companyId, periodo }: { companyId: string; periodo?: { ano: number; mes: number } }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
-  const inicial = mesAnterior();
+  const inicial = periodo ?? mesAnterior();
   const [ano, setAno] = useState(inicial.ano);
   const [mes, setMes] = useState(inicial.mes);
   const [resultado, setResultado] = useState<Conferencia | null>(null);

@@ -28,7 +28,7 @@ const baseNavItems = [
   { href: '/calendario', label: 'Calendário', icon: CalendarDays },
   { href: '/documentos', label: 'Documentos', icon: FileText },
   { href: '/impostos', label: 'Impostos & Guias', icon: Receipt },
-  { href: '/conferencia', label: 'Conferência', icon: Scale },
+  { href: '/conciliacoes', label: 'Conciliações', icon: Scale },
   { href: '/mensalidades', label: 'Mensalidades', icon: Wallet },
   { href: '/folha', label: 'Folha de Pagamento', icon: Users },
   { href: '/relatorios-contabeis', label: 'Relatórios Contábeis', icon: BarChart3 },
