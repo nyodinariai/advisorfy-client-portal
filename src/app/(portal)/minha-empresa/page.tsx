@@ -16,8 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuthStore } from '@/stores/authStore';
-import { useCompany, useAssignment } from '@/features/accounting/queries';
 import { formatCnpj } from '@/lib/format';
+import { linhasDoRegistroNaJunta } from '@/lib/minhaEmpresa';
 import api from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 import { minhaEmpresaService } from '@/services/minhaEmpresa';
@@ -207,6 +207,24 @@ function EnderecoEmpresaSection() {
     );
   }
 
+  // O endereço é o da sede, do contrato social: depois de informado só muda por alteração do contrato, que o escritório pede.
+  if (enderecoCompleto(endereco)) {
+    const linha2 = [endereco?.bairro, endereco?.municipio && endereco?.uf ? `${endereco.municipio}/${endereco.uf}` : endereco?.municipio ?? endereco?.uf].filter(Boolean).join(' · ');
+    return (
+      <div className="space-y-1 text-sm">
+        <p className="font-medium">
+          {endereco?.logradouro}, {endereco?.numero}
+          {endereco?.complemento ? ` — ${endereco.complemento}` : ''}
+        </p>
+        <p className="text-muted-foreground">{linha2}</p>
+        <p className="text-muted-foreground">CEP {endereco?.cep}</p>
+        <p className="pt-2 text-xs text-muted-foreground">
+          O endereço da sede só muda por alteração do contrato social. Se mudou, peça a alteração ao seu escritório.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form
       onSubmit={handleSubmit((values) => salvarMutation.mutate(values))}
@@ -362,11 +380,14 @@ function MeusDadosSection() {
 // ---------------------------------------------------------------------------
 
 export default function MinhaEmpresaPage() {
-  const user = useAuthStore((s) => s.user);
-  const companyId = user?.companyId ?? '';
-
-  const { data: company, isLoading: companyLoading } = useCompany(companyId);
-  const { data: assignment, isLoading: assignmentLoading } = useAssignment(companyId);
+  // Os papéis do cliente não acessam as rotas do ERP: os dados da empresa e o contador vêm do endpoint do portal.
+  const { data: empresa, isLoading: companyLoading, isError: companyError } = useQuery({
+    queryKey: queryKeys.minhaEmpresa(),
+    queryFn: minhaEmpresaService.getMinhaEmpresa,
+  });
+  const company = empresa;
+  const assignment = empresa?.contador ?? undefined;
+  const assignmentLoading = companyLoading;
 
   const { data: endereco } = useQuery({
     queryKey: queryKeys.minhaEmpresaEndereco(),
@@ -395,6 +416,13 @@ export default function MinhaEmpresaPage() {
         </Alert>
       )}
 
+      {companyError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Não foi possível carregar os dados da empresa. Tente novamente em instantes.</AlertDescription>
+        </Alert>
+      )}
+
       {/* Company data */}
       <Card>
         <CardHeader className="flex flex-row items-center gap-3 pb-4">
@@ -414,7 +442,7 @@ export default function MinhaEmpresaPage() {
           ) : (
             <div className="divide-y">
               <DetailRow label="Razão Social" value={company?.razaoSocial} />
-              <DetailRow label="Nome Fantasia" value={company?.nomeFantasia} />
+              <DetailRow label="Nome Fantasia" value={company?.nomeFantasia ?? undefined} />
               <DetailRow
                 label="CNPJ"
                 value={company?.cnpj ? formatCnpj(company.cnpj) : undefined}
@@ -437,6 +465,8 @@ export default function MinhaEmpresaPage() {
                     : undefined
                 }
               />
+              <DetailRow label="Natureza Jurídica" value={company?.naturezaJuridicaDescricao ?? company?.naturezaJuridica ?? undefined} />
+              {company && linhasDoRegistroNaJunta(company).map((l) => <DetailRow key={l.rotulo} label={l.rotulo} value={l.valor} />)}
             </div>
           )}
           <Separator className="my-4" />
@@ -484,8 +514,8 @@ export default function MinhaEmpresaPage() {
             </p>
           ) : (
             <div className="divide-y">
-              <DetailRow label="Nome" value={assignment.accountantName} />
-              <DetailRow label="E-mail" value={assignment.email} />
+              <DetailRow label="Nome" value={assignment.nome} />
+              <DetailRow label="E-mail" value={assignment.email ?? undefined} />
             </div>
           )}
         </CardContent>

@@ -31,6 +31,7 @@ export const queryKeys = {
   minhaFaturamentoVerificado: () => ['minha-faturamento-verificado'] as const,
   meusChamados: () => ['meus-chamados'] as const,
   chamado: (id: string) => ['chamado', id] as const,
+  minhaEmpresa: () => ['minha-empresa'] as const,
   minhaEmpresaEndereco: () => ['minha-empresa-endereco'] as const,
   meuPerfil: () => ['meu-perfil'] as const,
 };
