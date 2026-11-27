@@ -10,7 +10,9 @@ import { MensalidadeStatusBadge } from '@/components/financeiro/MensalidadeStatu
 import { PagarFaturaDialog } from '@/components/financeiro/PagarFaturaDialog';
 import { useMensalidades } from '@/features/financeiro/queries';
 import { parseLinhas } from '@/features/financeiro/types';
-import { useCompany, useAssignment } from '@/features/accounting/queries';
+import { useQuery } from '@tanstack/react-query';
+import { minhaEmpresaService } from '@/services/minhaEmpresa';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDate } from '@/lib/format';
 
@@ -30,12 +32,12 @@ const TIPO_LABEL: Record<string, string> = {
 export default function FaturaMensalidadePage() {
   const { id } = useParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
-  const companyId = user?.companyId ?? '';
   const [pagarFaturaOpen, setPagarFaturaOpen] = useState(false);
 
   const { data: mensalidades, isLoading } = useMensalidades();
-  const { data: company } = useCompany(companyId);
-  const { data: assignment } = useAssignment(companyId);
+  // Os dados da empresa e o contador vêm do endpoint do portal (os papéis do cliente não acessam as rotas do ERP).
+  const { data: company } = useQuery({ queryKey: queryKeys.minhaEmpresa(), queryFn: minhaEmpresaService.getMinhaEmpresa });
+  const assignment = company?.contador;
 
   const m = mensalidades?.find((item) => item.id === id);
 
@@ -62,7 +64,7 @@ export default function FaturaMensalidadePage() {
   const linhas = parseLinhas(m);
   const numeroFatura = `${m.referenciaAno}${String(m.referenciaMes).padStart(2, '0')}-${m.id.slice(0, 8).toUpperCase()}`;
   const empresaNome = company?.nomeFantasia ?? company?.razaoSocial ?? user?.name ?? '';
-  const escritorioNome = assignment?.accountantName ?? 'seu escritório contábil';
+  const escritorioNome = assignment?.nome ?? 'seu escritório contábil';
   const podePagar = m.status === 'PENDENTE' || m.status === 'VENCIDO';
 
   return (

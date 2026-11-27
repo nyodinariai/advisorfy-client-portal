@@ -10,6 +10,27 @@ export interface EnderecoEmpresa {
   uf: string | null;
 }
 
+export interface ContadorResponsavel {
+  nome: string;
+  email: string | null;
+}
+
+/** Os dados da empresa para o cliente: o cadastro, o registro na Junta, o endereço da sede e o contador responsável. */
+export interface MinhaEmpresa {
+  razaoSocial: string;
+  nomeFantasia: string | null;
+  cnpj: string | null;
+  regimeTributario: string | null;
+  tiposAtividade: string[] | null;
+  naturezaJuridica: string | null;
+  naturezaJuridicaDescricao: string | null;
+  nire: string | null;
+  dataArquivamentoAto: string | null;
+  dataArquivamentoConversao: string | null;
+  endereco: EnderecoEmpresa;
+  contador: ContadorResponsavel | null;
+}
+
 export interface AtualizarEnderecoEmpresaRequest {
   cep: string;
   logradouro: string;
@@ -38,6 +59,9 @@ export interface AtualizarMeuPerfilRequest {
 }
 
 export const minhaEmpresaService = {
+  getMinhaEmpresa: () =>
+    api.get<MinhaEmpresa>('/api/portal/minha-empresa').then((r) => r.data),
+
   getEndereco: () =>
     api.get<EnderecoEmpresa>('/api/portal/minha-empresa/endereco').then((r) => r.data),
 
